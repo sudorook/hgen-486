@@ -1,3 +1,1 @@
-# ECEV 35600
-
-Problem sets for Principles of Population Genetics I.
+# HGEN 48600
