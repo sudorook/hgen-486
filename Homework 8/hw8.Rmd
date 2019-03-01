@@ -1,0 +1,87 @@
+---
+title: Homework 8
+author: Ansel George
+output: pdf_document
+---
+
+# 1 Cancer cell population model
+
+*Background: Last week in Problem 1.2, we used a deterministic model of
+exponential growth for a cancer cell population.*
+
+> _Problem 1.2. Consider modeling cancer cells entering the blood/circulatory
+> systems as a non-homogeneous Poisson Process. In particular, suppose there is
+> a source cancer cell population whose size is growing deterministically. More
+> specifically, assume $x(t)$, the size of the source population at time $t$,
+> is growing exponentially at rate $r$ per hour (i.e. $x(t) = x_0 e^{rt}$ )
+> where x 0 is the starting size of the population. An expected fraction $m$
+> (for $0 \leq m \leq 1$) of that cancer population is entering the
+> blood/circulatory system, such that cancer cells enter the blood as a Poisson
+> Process with an instantaneous rate of $mx(t)$ per hour._
+
+*Let's instead consider a model of a cancer cell population size, $N(t)$, as a
+pure birth (Yule) process in which each cell gives birth at rate $r$ per hour.
+That is, the general birth process where $\lambda_i = ri$ and $\mu_i = 0$ for
+all $i$. Suppose the cancer population starts with ten cells and assume $r =
+0.01$.*
+
+*Answer the following questions:*
+
+1. _Assuming $r = 0.01$, after how many hours should we expect an $e$-fold
+   change in the mean value?_
+
+2. _Assuming $r = 0.01$, use known exact solutions for $\mathbb{P}\big(N (t) =
+   j\big)$ to plot the value of $\mathbb{P}\big(N (t) = j\big)$ for $1 \leq j
+   \leq 100$ for four values of $t$ (in hours): $t \in \{0, 50, 100, 200\}$. Do
+   this using a vertically stacked multi-panel plot. (Hint: If you use the
+   negative binomial function in R be conscious of the parameterization!)_
+
+3. _What is the mean and variance of the cancer cell population size after $200$
+   hours?_
+
+4. _**Extra Credit**. Revisit last week’s problem in which a proportion $m =
+   0.0001$ of cancer cells enter the blood stream, and we asked at what time is
+   there a $99%$ probability that the blood will have received $1000$ cancer
+   cells.  Update your answer using our new stochastic model for the cancer
+   cell source population size. (Continue to assume $r = 0.01$ and the starting
+   population is size in the cancer is $10$ cells). Provide a value to the
+   nearest tenth of an hour and assess if the number is higher or lower than in
+   the deterministic model._
+
+
+# 2 Basic molecular phylogenetics
+
+*Background: Consider a three taxon tree of human, chimp, and gorilla. Assume
+the human-chimp species divergence is $6$ million years ago. Assume the
+human/chimp vs. gorilla divergence is $7$ million years ago. Assume a
+substitution rate of $\mu = 0.2 * 10^{-8}$ per base pair (bp) per year. Further
+assume the **Jukes-Cantor** model of DNA evolution and that the initial bp in
+the common ancestor of all three species is equally likely to have been an $A$,
+$C$, $T$, or $G$. The Jukes-Cantor model assumes that mutations of all types
+are equally likely. (Note: Ignore the subtlety that sequence divergence times
+often predate species divergence times).*
+
+*Answer the following questions:*
+
+1. _Write the rate matrix ($Q$) and the transition function ($P_{ij}(t)$) for
+   the Jukes-Cantor model._
+
+2. _Compute the log-likelihood of a site configuration where: human=$A$,
+   chimp=$A$, gorilla=$G$ under the given phylogenetic tree. Show your
+   calculations and/or code._
+
+3. _Compute the log-likelihood for the same site configuration under a revised
+   phylogeny where humans and gorillas now separate $6$ million years ago and
+   chimpanzees separate from the human/gorilla common ancestor $7$ million
+   years ago._
+
+4. _Compare your results for 2 and 3 - which tree is favored and by how many
+   log-likelihood units?  What is your judgment on whether there is enough
+   support to favor one tree versus another. (Put another way, would you want
+   to collect more data or can you already reach a confident decision on the
+   phylogeny?)_
+
+5. _Research the **Kimura two-parameter** and the **General Time Reversible**
+   models of sequence evolution. Both of these models are more frequently used
+   than the Jukes-Cantor model. Describe in one sentence what is useful about
+   each model._
