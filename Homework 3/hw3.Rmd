@@ -1,0 +1,498 @@
+---
+title: 'HGEN 48600: Problem Set 3'
+author: 'Ansel George'
+output: pdf_document
+---
+
+```{r}
+library(ggplot2)
+set.seed(10)
+```
+
+# 1 (A)
+
+## A
+
+**Write a function to simulate data for the medical screening example above.
+The function should take as input the proportion of individuals who have the
+disease, and the number of individuals to simulate. It should output a table,
+one row for each individual, with two columns: the first column (x) is the
+protein concentration for that individual, the second column (z) is an
+indicator of disease status (1=disease, 0=normal).**
+
+```{r}
+simulatePopulation <- function(pDisease, nPeople) {
+  diseaseState <- rbinom(nPeople, 1, pDisease)
+  # rgamma scale: 1 -> diseased, 1/2 -> normal
+  proteinConcentration <- rgamma(nPeople, scale=(1/(1+(1-diseaseState))),
+                                 shape=2)
+  return(cbind(x=proteinConcentration, z=diseaseState))
+}
+```
+
+
+## B
+
+**Write a function to compute the likelihood ratio in the medical screening
+example.**
+
+```{r}
+computeLR <- function(diseaseTable) {
+  # The LR is diseased/normal.
+  LR <- dgamma(diseaseTable[,1], scale=1, shape=2) / dgamma(diseaseTable[,1],
+                                                            scale=.5, shape=2)
+  return(LR)
+}
+```
+
+
+## C
+
+**Use the above functions to answer the following question by simulation.
+Suppose we screen a population of individuals, 20% of which are diseased, and
+compute the LR for each individual screened. Among individuals with an LR
+“near” c, what proportion are truly diseased? Denoting this proportion
+$q\_{D}(c)$, make a plot of $log_{10}(c)$ [x axis] vs $q_{D}(c)$ [y axis], with
+c varying from 1/10 to 10 say ($log{10}(c)$ varies from -1 to 1.) Or maybe a
+wider range if you like (the wider the range, the larger the simulation study
+you will need to get reliable results).**
+
+```{r}
+computeTrueFraction <- function(population, cmin, cmax, stepsize, threshold) {
+  cutoffs <- c()
+  truefraction <- c()
+  LR <- computeLR(population)
+  
+  # Find the ratio of all diseased individuals with a LR == cutoff +- threshold
+  # (arbitrary value) to the total number of counts with LR == cutoff +-
+  # threshold.
+  for (c in seq(cmin, cmax, stepsize)) {
+    fraction <- sum(abs(LR - c) < threshold & population[,2]) / sum(abs(LR - c) < threshold)
+    cutoffs <- append(cutoffs, c)
+    truefraction <- append(truefraction, fraction)
+  }
+  return(cbind(cutoffs, truefraction))
+}
+```
+
+```{r}
+n <- 1000000 # the more, the merrier
+p <- .2
+population <- simulatePopulation(p, n)
+
+results <- as.data.frame(computeTrueFraction(population, .1, 10, .05, .01))
+plt <- ggplot(results) + aes(x=log10(cutoffs), y=truefraction) +
+  geom_point()
+plt
+```
+
+Note that the choice of $threshold=.01$ here is completely arbitrary. The only
+goal was not to set it so low that it cause many cutoffs to yield no mix of
+disease and healthy variants and not so high that resolution of the true
+fraction signal is lost. $.01$ seems to meet both criteria.
+
+
+## D
+
+**Use the computations introduced in this vignette to compute the theoretical
+value for $q\_{D}(c)$, and plot these on the same graph as your simulation
+results to demonstrate that your simulations match the theory. [It should
+provide a good agreement, provided your simulation is large enough.]**
+
+The protein concentrations for healthy and diseased individuals are both Gamma
+distributed. This means the LR can be computed as follows:
+
+\begin{align}
+  LR &= \frac{P(X|\theta_1)}{P(X|\theta_0)} \\
+  &= \frac{ \frac{x^{k-1}e^{\frac{-x}{\theta_1}}}{\Gamma(k)\theta_1^k}  }{ \frac{x^{k-1}e^{\frac{-x}{\theta_0}}}{\Gamma(k)\theta_0^k} } \\
+  &= \frac{ e^{-x} }{ \frac{e^{-2x}}{\frac{1}{2}^2 } } \\
+  &= \frac{1}{4}e^{x}
+\end{align}
+
+This means the minimum value of the LR is $.25$, when $x=0$, and the maximum LR
+along the interval $(.1, 10)$ is $log(40)$, when $x=10$. 
+
+```{r}
+x <- seq(log(.25), log(40), .05)
+lr <- dgamma(x, scale=1, shape=2)/dgamma(x, scale=.5, shape=2)
+tf <- p*dgamma(x, scale=1, shape=2)/(p * dgamma(x, scale=1, shape=2) +
+                                    (1-p)*dgamma(x, scale=.5, shape=2))
+expected = data.frame("Value"=x, "LR"=lr, "TrueFraction"=tf)
+
+ggplot(results) + geom_point(aes(x=log10(cutoffs), y=truefraction)) +
+  geom_line(data=expected, aes(x=log10(LR), y=TrueFraction, color='red'))
+```
+
+
+## E
+
+**Repeat the above, but in the case where only 2% of the screened population
+are diseased.**
+
+```{r}
+n <- 1000000
+p <- .02
+population <- simulatePopulation(p, n)
+
+results <- as.data.frame(computeTrueFraction(population, .1, 10, .05, .01))
+
+x = seq(.1, 10, .05)
+x <- seq(log(.25), log(40), .05)
+lr = dgamma(x, scale=1, shape=2)/dgamma(x, scale=.5, shape=2)
+tf = p*dgamma(x, scale=1, shape=2)/(p * dgamma(x, scale=1, shape=2) +
+                                    (1-p)*dgamma(x, scale=.5, shape=2))
+expected = data.frame("Value"=x, "LR"=lr, "TrueFraction"=tf)
+
+ggplot(results) + geom_point(aes(x=log10(cutoffs), y=truefraction)) +
+  geom_line(data=expected, aes(x=log10(LR), y=TrueFraction, color='red'))
+```
+
+
+# 2 (B1)
+
+## A
+
+**Write an R function to simulate genetic data on (haploid) tusks from a
+mixture distribution: that is, sampled from a population in which each tusk
+comes from one of $K$ populations.**
+
+**Your function should take as input:**
+
+ - **an integer N, the number of tusks to simulate**
+ - **a vector $w$ of mixture proportions, a vector of length $K$ summing to 1. (I
+   usually use the notation $\pi$ for mixture proportions, but maybe $\pi$ is
+   best avoided in computer programming because it can be mistaken for the
+   mathematical constant PI...)**
+ - **a K by M matrix, F, of allele frequencies (so $f\_{km} \in [0,1]$ is the
+   frequency of the "1" allele at marker $m$ in population $k$), where $M$ is
+   the number of markers.**
+
+**Your function should output a list consisting of**
+
+ - **an N by M matrix of data (X)**
+ - **an N vector (Z) of component memberships, which say which population each
+   sample actually came from (which in many mixture problems will be latent).**
+
+```{r}
+makeTuskMixture <- function(N, w, F) {
+  Z = sample(1:length(w), N, prob=w, replace=TRUE)
+  X = matrix(0, nrow=N, ncol=dim(F)[2])
+  for (i in 1:N) {
+    for (m in 1:dim(F)[2]) {
+      X[i,m] = rbinom(1, 1, F[Z[i],m])
+    }
+  }
+  return(list(X, Z))
+}
+```
+
+
+## B
+
+**Write an R function to compute the log-likelihood \(l(w)\) for a data set
+simulated from the mixture model you have just implemented.**
+
+**Your function should take as input:**
+
+ - **a data matrix $X$ produced by the above.**
+ - **the $K$ by $M$ matrix $F$ of allele frequencies (considered to be known
+   here).**
+ - **a $K$ vector of mixture proportions, $w$, that sum to 1.**
+
+**Your function should output $l(w)$, the log-likelihood under the mixture
+model for the whole data set.**
+
+```{r}
+computeLogLikelihood <- function(X, F, w) {
+  lw = 0*1:dim(X)[1]
+  for (i in 1:dim(X)[1]) {
+    x = X[i,]
+    L = function(f,x){ prod(f^x*(1-f)^(1-x)) }
+    for (j in 1:dim(F)[1]) {
+      f = F[j,]
+      lw[i] = lw[i] + w[j]*L(f,x)
+    }
+    lw[i] = log10(lw[i])
+  }
+  return(sum(lw))
+}
+```
+
+## C
+
+**Perform a preliminary test of your likelihood and simulation programs:**
+
+**Use your simulation code to simulate data for the tusk example:  1000 tusks
+simulated from a mixture of 2 populations, forest and savanna, with mixture
+proportions $w=(0.25, 0.75)$. Use the allele frequencies for the 6 markers given
+in
+\url{https://stephens999.github.io/fiveMinuteStats/likelihood_ratio_simple_models.html}**
+
+**Apply your likelihood code to the simulated data set to compute the
+log-likelihood for $w=(w_1,w_2=1-w_1)$, for $w_1$ in the range 0 to 1. Plot the
+log-likelihood as a function of $w_1$ and check that it is maximized close to
+the true value of $w_1=0.25$.**
+
+```{r}
+N <- 1000
+w <- c(.25, .75)
+F <- matrix(rbind(c(0.8, 0.2, 0.11, 0.17, 0.23, 0.25), c(0.40, 0.12, 0.21,
+                                                         0.12, 0.02, 0.32)),
+            nrow=2)
+
+tmp <- makeTuskMixture(N,w,F)
+X <- tmp[[1]]
+Z <- tmp[[2]]
+
+computeLogLikelihood(X,F,w)
+
+wtest <- seq(0,1,.01)
+wtest <- cbind(wtest,1-wtest)
+
+lw <- 0*1:dim(wtest)[1]
+for (i in 1:dim(wtest)[1]) {
+  lw[i] <- computeLogLikelihood(X, F, wtest[i,])
+}
+qplot(wtest[,1], lw)
+wtest[which.max(lw),]
+```
+
+For two populations with proportions .25 and .75, respectively, the MLE which
+is close to .25 (there is sampling error after all) maximized the
+log-likelihood.
+
+
+# 3 (B2)
+
+**Simple EM algorithm for estimating mixture component proportions
+("weights").**
+
+**Read \url{https://stephens999.github.io/fiveMinuteStats/intro_to_em.html}**
+
+**The function "mixture.EM" in that vignette implements an EM algorithm to
+estimate mixture proportions for data from a mixture where the component
+distributions are known. That is for maximizing the log-likelihood \(l(w)\)
+given data \(x_1,\dots,x_n\) that are independent draws from the mixture model
+\(p(x_i) = \sum_k w_k p(x_i | z_i=k)\), where  the values of \(p(x_i | z_i=k)\)
+are known. The vignette applies it to estimate mixture proportions for a
+mixture of 2 Gaussians (with known means and variances). But it should work for
+component distributions other than Gaussian, and also a mixture of more than 2
+components.**
+
+**Use this function to estimate mixture proportions, using data simulated from
+problem B1. Do at least 2 simulated data sets, one with more than 2 mixture
+components. Check that the log-likelihood is increasing each iteration and
+compare your estimated mixture proportions with the truth. Check whether you
+get the same answer from different starting points.**
+
+**Note: usually when using an EM algorithm you will not get the same answer from
+different starting points. However, estimating the mixture weights (as opposed
+to the mixture component parameters themselves, like the means) as we are here
+turns out to be a very special case where the log-likelihood is a convex
+function with a single optimum. Because of this, here you will get essentially
+the same result every time, except for small numerical errors.**
+
+
+```{r}
+
+# Adjusted provided compute.log.lik to compute the likelihoods for arbitrarily
+# many mixture populations.
+compute.log.lik <- function(X, L, w) {
+  for (i in 1:length(w)) {
+    L[,i] = L[,i]*w[i]
+  }
+  return(sum(log(rowSums(L))))
+}
+
+# Compute likelihood for entire dataset with arbitrarily many mixture
+# populations. Returns matrix containing per-individual likelihood ratios (not
+# the overall likelihood for the entire data set.
+computeLikelihood <- function(X, w) {
+  L = matrix(NA, nrow=dim(X)[1], ncol=length(w))
+  for (i in 1:dim(L)[1]) {
+    x = X[i,]
+    l = function(f,x){ prod(f^x*(1-f)^(1-x)) }
+    for (j in 1:dim(L)[2]) {
+      L[i,j] = l(F[j,],x)
+    }
+  }
+  return(L)
+}
+
+mixture.EM <- function(w.init, L, X) {
+  
+  w.curr <- w.init
+  
+  # store log-likehoods for each iteration
+  log_liks <- c()
+  ll       <- compute.log.lik(X, L, w.curr)
+  log_liks <- c(log_liks, ll)
+  delta.ll <- 1
+
+  # while (delta.ll > 1e-5) {
+  while (delta.ll > 1e-5) {
+    w.curr   <- EM.iter(w.curr, L)
+    ll       <- compute.log.lik(X, L, w.curr)
+    log_liks <- c(log_liks, ll)
+    delta.ll <- log_liks[length(log_liks)]  - log_liks[length(log_liks)-1]
+  }
+  return(list(w.curr, log_liks))
+}
+
+EM.iter <- function(w.curr, L, ...) {
+  
+  # E-step: compute E_{Z|X,w0}[I(Z_i = k)]
+  z_ik <- L
+  for(i in seq_len(ncol(L))) {
+    z_ik[,i] <- w.curr[i]*z_ik[,i]
+  }
+  z_ik <- z_ik / rowSums(z_ik)
+  
+  # M-step
+  w.next <- colSums(z_ik)/sum(z_ik)
+  return(w.next)
+}
+```
+
+### EM with two mixtures
+
+```{r}
+N <- 1000
+w <- c(.25, .75)
+F <- matrix(rbind(c(0.8, 0.2, 0.11, 0.17, 0.23, 0.25), c(0.40, 0.12, 0.21,
+                                                         0.12, 0.02, 0.32)),
+            nrow=2)
+
+tmp <- makeTuskMixture(N,w,F)
+X <- tmp[[1]]
+Z <- tmp[[2]]
+L <- computeLikelihood(X, w)
+```
+
+```{r}
+ee <- mixture.EM(w.init=c(0.5,0.5), L, X)
+print(paste("Estimate = (", round(ee[[1]][1],2), ",", round(ee[[1]][2],2), ")",
+            sep=""))
+plot(ee[[2]], ylab='incomplete log-likelihood', xlab='iteration')
+```
+
+The EM algorithm successfully finds the solution with an initial guess of
+$\pi_1=.5$ and $\pi_2 = .5$.
+
+```{r}
+ee <- mixture.EM(w.init=c(0.0,1.0), L, X)
+print(paste("Estimate = (", round(ee[[1]][1],2), ",", round(ee[[1]][2],2), ")",
+            sep=""))
+plot(ee[[2]], ylab='incomplete log-likelihood', xlab='iteration')
+```
+
+The guess set at the boundary conditions fails to converge on a solution. This
+is because the update step in the EM algorithm cannot obtain updated guesses
+for maximizing mixture parameters. Essentially, it's saying that all elements
+come from one component ($P(Z|X)=1$) and none of any others ($P(Z|X)=0$).
+
+
+```{r}
+ee <- mixture.EM(w.init=c(0.75,0.25), L, X)
+print(paste("Estimate = (", round(ee[[1]][1],2), ",", round(ee[[1]][2],2), ")",
+            sep=""))
+plot(ee[[2]], ylab='incomplete log-likelihood', xlab='iteration')
+```
+
+This guess can find the right solution.
+
+
+### EM with four mixtures
+
+```{r}
+N <- 10000
+w <- c(.3, .1, .4, .2)
+F <- matrix(rbind(c(.1, .3, .1, .4), c(.8, .5, .3, .8), c(.4, .6, .5, .1),
+                  c(.9, .9, .4, .8)), nrow=4)
+
+tmp <- makeTuskMixture(N,w,F)
+X <- tmp[[1]]
+Z <- tmp[[2]]
+L <- computeLikelihood(X, w)
+```
+
+```{r}
+ee <- mixture.EM(w.init=c(0.4, 0.1, .2, .3), L, X)
+print(paste("Estimate = (", round(ee[[1]][1],2), ", ", round(ee[[1]][2],2), 
+            ", ", round(ee[[1]][3],2), ", ", round(ee[[1]][4],2), ")", sep=""))
+plot(ee[[2]], ylab='incomplete log-likelihood', xlab='iteration')
+```
+
+The EM returns accurate estimates of the parameters.
+
+
+```{r}
+ee <- mixture.EM(w.init=c(0.89, 0.01, .09, .01), L, X)
+print(paste("Estimate = (", round(ee[[1]][1],2), ", ", round(ee[[1]][2],2), 
+            ", ", round(ee[[1]][3],2), ", ", round(ee[[1]][4],2), ")", sep=""))
+plot(ee[[2]], ylab='incomplete log-likelihood', xlab='iteration')
+```
+
+The EM returns accurate estimates of the parameters.
+
+
+**Now, specifically apply your EM algorithm to data as simulated in B1c (the
+mixture with 2 components, and true \(w_1=0.25\)).**
+
+ - **Simulate data from this model 100 times; each time apply an EM algorithm
+   to estimate $w_1$. Plot a histogram of the 100 maximum likelihood estimates
+   you obtain. They should be approximately normally distributed about the true
+   value of 0.25. Read
+   \url{https://stephens999.github.io/fiveMinuteStats/asymptotic_normality_mle.html}.**
+ - **Also plot a histogram of the 100 values of the "generalized log-likelihood
+   ratio statistic" $(2\*[l(\hat{w})-l(0.25)])$. Use qqplot to compare the
+   distribution you get with a chi-squared distribution on 1 degree of freedom.
+   Read \url{http://stephens999.github.io/fiveMinuteStats/wilks.html}.**
+
+```{r}
+N <- 1000
+w <- c(.25, .75)
+F <- matrix(rbind(c(0.8, 0.2, 0.11, 0.17, 0.23, 0.25), c(0.40, 0.12, 0.21,
+                                                         0.12, 0.02, 0.32)),
+            nrow=2)
+
+runs <- 100
+mles <- 0*1:runs
+llrs <- 0*1:runs
+for (i in 1:runs) {
+
+  tmp <- makeTuskMixture(N,w,F)
+  X <- tmp[[1]]
+  Z <- tmp[[2]]
+  L <- computeLikelihood(X, w)
+
+  ee <- mixture.EM(w.init=c(0.5, 0.5), L, X)
+
+  mle <- ee[[1]][1]
+  mles[i] <- mle
+  llrs[i] <- 2*(computeLogLikelihood(X, F, c(mle, 1-mle)) -
+                computeLogLikelihood(X, F, w))
+}
+
+# Use Freedman-Diaconis Rule for binwidth
+qplot(mles, geom='histogram', binwidth=2*IQR(mles)*length(mles)^(-1/3))
+```
+
+This result is approximately normally distributed. See the normal Q-Q plot
+below.
+
+```{r}
+qqnorm(mles)
+```
+
+The Q-Q plot for the distribution of the $\chi^2$ statistics is as follows:
+
+```{r}
+qqplot(rchisq(1000, df=1), llrs)
+```
+
+The result roughly, but not exactly, displays a one-to-one relationship (here
+$y=2x$) between the observed and expected $\chi^2$ values. The general trend is
+that the observed log-likelihood undershoots the expected for $\chi^2$
+distributed data as the estimate increases. Most data points, which have low
+log-likelihood ratios, conform.

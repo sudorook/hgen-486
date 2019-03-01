@@ -1,0 +1,20 @@
+
+\begin{align}
+m_3(x_2) &= \sum_{x_3} P(X_3|X_2) P(X_4|X_3) \\
+  &= \sum_{x_1} P(X_1 \cap X_2)\\
+  &= P(X_2)\\
+\implies \sum_{x_3} P(X_3|X_2) \sum_{x_4} P(X_4|X_3)\sum_{x_1} P(X_1)P(X_2|X_1) &= \sum_{x_3} P(X_3|X_2) m_1(x_2) \sum_{x_4} P(X_4|X_3)
+\end{align}
+
+\begin{align}
+m_4(x_3) &= \sum_{x_4} P(X_4|X_3)\\
+  &= 1\\
+\implies \sum_{x_3} P(X_3|X_2) m_1(x_2) \sum_{x_4} P(X_4|X_3) &= \sum_{x_3} P(X_3|X_2) m_1(x_2)
+\end{align}
+
+\begin{align}
+m_3(x_2) &= \sum_{x_3} P(X_3|X_2) m_1(X_2)\\
+  &= \sum_{x_3} P(X_3|X_2) P(X_2)\\
+  &= \sum_{x_3} P(X_3 \cap X_2)\\
+  &= P(X_2)
+\end{align}
