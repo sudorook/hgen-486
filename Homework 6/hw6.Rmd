@@ -1,0 +1,666 @@
+---
+title: "Problem Set 6"
+author: "Ansel George"
+output: pdf_document
+---
+
+```{r}
+library(gtools)
+
+set.seed(10)
+```
+
+Suppose you have a number of samples from a 'population' that contains an
+unknown fraction of forest or savannah elephants. (Assume elephants are haploid
+for simplicity.) Introduce the following notation.
+
+* Let $x_i$ denote the genetic data from elephant $i$. Each $x_i$ is a vector
+  of $0$s and $1$s indicating which allele is observed at each of $J$ loci.
+  (so $x_{ij} \in \{0,1\}$ is the allele observed in sample $i$ at locus $j$.)
+* Let $z_i$ denote the indicator for whether elephant $i$ is from forest or
+  savanna.
+* Let $\pi_0$ denote the fraction of the population that is forest.
+* Let $f_{0j}$ denote the frequency of allele "1" in forest elephants at locus
+  $j$.
+* Let $f_{1j}$ denote the frequency of allele "1" in savannah elephants at
+  locus $j$.
+
+Do the following:
+
+# 1.
+*Draw a graphical representation of the way these variables/parameters connect
+with one another in a probability model. Identify which quantities are
+observed/known and which are unobserved/unknown.*
+
+```{r}
+library(igraph)
+
+adj <- rbind(c(0, 1, 1, 1, 0, 0, 0, 0),
+             c(0, 0, 0, 0, 1, 0, 0, 0),
+             c(0, 0, 0, 0, 0, 1, 0, 0),
+             c(0, 0, 0, 0, 0, 0, 1, 0),
+             c(0, 0, 0, 0, 0, 0, 0, 0),
+             c(0, 0, 0, 0, 0, 0, 0, 0),
+             c(0, 0, 0, 0, 0, 0, 0, 0),
+             c(0, 0, 0, 0, 1, 1, 1, 0))
+
+names <- c("Pi", "Z1", "Z2", "Z3", "X1", "X2", "X3", "P")
+plot(graph_from_adjacency_matrix(adj, weighted=T), vertex.label=names)
+```
+
+Observed/Known variables:
+
+* $P$ - allele frequencies for savannah and forest elephants, copied from
+  \url{https://stephens999.github.io/fiveMinuteStats/likelihood_ratio_simple_models.html}
+* $X$ - genotype data
+
+Unknowns:
+
+* $\Pi$ - overall frequency of forest vs savannah elephants
+* $Z$ - origin of all elephants in the sample $X$
+
+
+# 2.
+*Write down the likelihood you would use to do inference for the unknowns.*
+
+Based on the structure of the Bayesian network, frequencies of hidden states
+$\Pi$ and allele frequencies per locus per population $P$ are independent of
+other parameters. Also, data $X$ is conditionally independent of $\Pi$ given
+hidden states $Z$.
+
+\begin{align}
+\implies P(X,\Pi,Z,P) &= P(\Pi)P(P)P(Z|\Pi)P(X|Z,P)
+\end{align}
+
+
+# 3.
+*Take the unknown quantities one at a time, and temporarily imagine that you
+were given the values for all the other variables. Write down the likelihood
+for that unknown quantity, ignoring parts that are constants (i.e. do not
+depend of that unknown). Using this, work out what the conjugate prior families
+would be for each of the unknown quantities (if all other quantities were
+known).*
+
+Given full data for every parameter but one, the conditional distribution of
+the one unknown can be computed by marginalizing over all other variables. In
+Bayesian terms, $P(A|B) = \frac{P(A,B)}{P(B)} \propto P(A,B) \propto
+\frac{P(B|A)}{P(A)}$. 
+
+
+When $\Pi$ is unknown:
+
+\begin{align}
+P(\Pi|X,Z,P) &\propto P(\Pi)P(P)P(Z|\Pi)P(X|Z,P) \\
+  &= P(\Pi)P(P)P(Z|\Pi)P(X|Z,P) \\
+  &\propto P(\Pi)P(Z|\Pi)
+\end{align}
+
+The posterior distribution for $\Pi$ is proportional to the prior on $\Pi$ and
+the likelihood of $Z|\Pi$.
+
+$Z|\Pi = \prod_{i} \prod_{k} \pi_{k}^{z_i}$, where $z_i$ is an indicator $z \in
+\{0,1\}$ for the population of origin for individual $i$, and $\pi_k$ being the
+likelihood of an individual from subpopulation $k$. This is a multinomial
+distribution and has a Dirichlet conjugate pair.
+
+With a multinomial prior, both probabilities are multinomially-distributed (or
+binomially in the case $k=2$), with a Dirichlet posterior distribution.
+Initializing $\Pi$ with a uniform distribution is a simple instance of a
+Dirichlet distribution.
+
+\begin{align}
+P(Z|X,\Pi,P) &\propto P(\Pi)P(P)P(Z|\Pi)P(X|Z,P) \\
+  &\propto P(X|Z,P)P(Z|\Pi)
+\end{align}
+
+$P(X|Z,P)$ is the probability of observing genotype $x_i$ given known
+individual origin $Z$ and subpopulation frequency $\Pi$. Note that each locus
+is independent and therefore can be considered individually.
+
+$P(x_i|Z,P) = \prod_j (\pi_{z_k})^{x_{ij}}(1-\pi_{z_k})^{1-x_{ij}}$, where the
+product is over the $j$ loci in individual $x_i$ and $x_{ij}$ denotes the
+genotype of individual $x_i$ at locus $j$. This likelihood, when normalized,
+follows a Beta distribution.
+
+The probability of $Z|\Pi$ follows a multinomial distribution. The Beta
+distribution is a special case of a Dirichlet distribution, just as a
+multinomial distribution is a generalization of the binomial. The posterior is
+therefore Dirichlet-distributed.
+
+\begin{align}
+P(P|X,Z,\Pi) &\propto P(\Pi)P(P)P(Z|\Pi)P(X|Z,P) \\
+  &\propto P(X|Z,P)P(P)
+\end{align}
+
+As explained above, the $P(x_i|Z,P)$ follows a binomial distribution with Beta
+conjugate pair. When $\P$ is beta-distributed (assume uniform $\beta(1,1)$ for
+simplicity), the posterior follows a Beta distribution.
+
+
+# 4.
+*Provide a detailed outline of a Gibbs sampler to fit the model. (This model is
+analogous to the Structure model without admixture, where $k=2$.)*
+
+The Gibbs sampler takes elephant genotype data $X$ and allele frequencies $P$
+if known.
+
+**Initialize:**
+
+Initialize unknown parameters $\Pi^{(0)}$, $Z^{(0)}$, and $P^{(0)}$. 
+
+$\Pi^{(0)} \sim Dir(\underline{\alpha}=1)$ (uniform), $Z^{(0)}$ is a random
+sampling of $\Pi^{(0)}$, and $P^{(0)}$ is computed from the.
+
+**Induction:**
+
+Compute the conditional distributions based on the existing data and sample the
+next iterations.
+
+$\Pi^{(i+1)} = \Pi^{(i)} P(Z^{(i)}|\Pi^{(i)}) \propto \Pi^{(i)}
+Dir(\underline{\alpha})$ where $\underline{\alpha}$ is a vector containing the
+number of individuals in each subpopulation $k$. The new estimate for each
+subpopulation is sampled from the Dirichlet posterior.
+
+$P^{(i+1)} = P^{(i)} P(X|Z^{(i)}, P^{(i)})$
+
+$Z^{(i+1)} = P(Z^{(0)}|\Pi^{(1)}) P(X|Z^{(0)}, P^{(1)})$
+
+**Termination:**
+
+Continue computing updates to $P$, $\Pi$, and $Z$ until sufficiently many
+iterations have passed.
+
+
+# 5.
+*Implement this Gibbs sampler in either R or python.*
+
+```{r}
+#' @param x an R vector of data
+#' @param P a K by R matrix of allele frequencies
+#' @return the log-likelihood for each of the K populations
+log_pr_x_given_P <- function(x,P){
+  tP <- t(P) #transpose P so tP is R by K
+  return(colSums(x*log(tP)+(1-x)*log(1-tP)))
+}
+
+normalize <- function(x){return(x/sum(x))} #used in sample_z below
+
+#' @param x an n by R matrix of data
+#' @param P a K by R matrix of allele frequencies
+#' @return an n vector of group memberships
+sample_z <- function(x, P, Pi){
+  K <- nrow(P)
+  loglik_matrix <- apply(x, 1, log_pr_x_given_P, P=P)
+
+  lik_matrix <- exp(loglik_matrix)
+  lik_matrix <- lik_matrix * as.vector(Pi)
+
+  p.z.given.x <- apply(lik_matrix,2,normalize) # normalize columns
+
+  z <- rep(0, nrow(x))
+  for(i in 1:length(z)){
+    z[i] <- sample(1:K, size=1,prob=p.z.given.x[,i],replace=TRUE)
+  }
+  return(z)
+}
+
+#' @param x an n by R matrix of data
+#' @param z an n vector of cluster allocations
+#' @return a k by R matrix of allele frequencies
+sample_P <- function(x,z,k){
+  R <- ncol(x)
+  P <- matrix(ncol=R,nrow=k)
+  for(i in 1:k){
+    sample_size <- sum(z==i)
+    if(sample_size==0){
+      number_of_ones=rep(0,R) 
+    } else {
+      number_of_ones <- colSums(x[z==i,])
+    }
+    P[i,] <- rbeta(R,1+number_of_ones,1+sample_size-number_of_ones) 
+  }
+  return(P)
+}
+
+#' @param z an n vector of cluster allocations (1...k)
+#' @param k the number of clusters
+sample_pi <- function(z,k){
+  counts <- colSums(outer(z,1:k,FUN="=="))
+  Pi <- gtools::rdirichlet(1,counts+1)
+  return(Pi)
+}
+
+gibbs <- function(x, P=NULL, k = 2, niter = 100){
+  # Initialize priors
+  z <- sample(1:k,nrow(x),replace=TRUE)
+  Pi <- rep(1/k,k)
+
+  res <- list(z = matrix(nrow=niter, ncol=nrow(x)), Pi = matrix(nrow=niter, ncol=k))
+  res$z[1,]=z
+  res$Pi[1,]=Pi
+ 
+  pknown <- TRUE
+  if (is.null(P)) {
+    pknown <- FALSE
+  }
+
+  for(i in 2:niter){
+    Pi <- sample_pi(z,k)
+    if (pknown == FALSE) {
+      P <- sample_P(x,z,k)
+    }
+    z <- sample_z(x,P,Pi)
+    res$z[i,] <- z
+    res$Pi[i,] <- Pi
+  }
+  if (pknown == FALSE) {
+    print(P)
+  }
+  return(res)
+}
+```
+
+# 6.
+*Test your implementation on simulated data. Compare the results of your
+algorithm with the true parameter values.*
+
+```{r}
+# Generate the genotype and indicator for an elephant.
+makeElephant <- function(z, f) {
+  k <- length(z) # number of subpopulations
+
+  subpopulation <- sample(seq(1, k), 1, prob=z) 
+  elephant <- rbinom(f[subpopulation,], 1, f[subpopulation,])
+  return(list(x=elephant, z=subpopulation))
+}
+
+# Generate genotypes and indicators for n elephants.
+makeElephants <- function(n, z, f) {
+  genotypes <- matrix(0, n, ncol(f))
+  indicators <- matrix(n, 0, 1)
+  for (i in 1:n) {
+    elephant <- makeElephant(z, f)
+    genotypes[i,] <- elephant$x
+    indicators[i] <- elephant$z
+  }
+  return(list(x=genotypes, z=indicators))
+}
+```
+
+Using the provided allele frequencies for the savannah and forest elephants:
+
+```{r}
+n <- 1000
+fs <- c(0.40, 0.12, 0.21, 0.12, 0.02, 0.32)
+ff <- c(0.80, 0.20, 0.11, 0.17, 0.23, 0.25)
+f <- rbind(fs, ff)
+p <- c(.2, .8) # 20% savannah, 80% forest
+
+pop <- makeElephants(n, p, f)
+x <- pop$x
+z <- pop$z
+```
+
+```{r}
+niter <- 100
+res <- gibbs(x=x, k=2, niter=niter)
+table(res$z[niter,],z)
+res$Pi[niter,]
+```
+
+The sampler returns roughly similar proportions of each subpopulation $\Pi$,
+and it does a poor job of differentiating between the two in terms of allele
+frequencies and population of origin. This is understandable given that many
+allele frequencies are not substantially different between forest and savannah
+elephants at different loci, so some genotypes may have similar likelihoods for
+both subpopulations.
+
+If the Interpol allele frequencies are to be considered canonical and in no
+need of estimation:
+
+```{r}
+niter <- 100
+res <- gibbs(x=x, P=f, k=2, niter=niter)
+table(res$z[niter,],z)
+res$Pi[niter,]
+```
+
+The subpopulation frequencies returned are more consistent, though the
+individual assignments remain poor.
+
+When given larger differences between allele frequencies in the subpopulations,
+the sampler better classifies individuals and returns more accurate estimates
+allele frequencies.
+
+```{r}
+n <- 1000
+fs <- c(.1, .1, .1, .1, .1)
+ff <- c(.9, .9, .9, .9, .9)
+f <- rbind(fs, ff)
+p <- c(.2, .8) # 20% savannah, 80% forest
+
+pop <- makeElephants(n, p, f)
+x <- pop$x
+z <- pop$z
+```
+
+```{r}
+niter <- 100
+res <- gibbs(x=x, k=2, niter=niter)
+table(res$z[niter,],z)
+res$Pi[niter,]
+```
+
+This returns better results for the proportion of savannah and forest elephants
+and for the allele frequencies at each locus for each population.
+
+
+**Note**, the sampler may return a 1 $\rightarrow$ 2 and 2 $\rightarrow$ 1
+discrepancy. This is due to it being given uniform priors. Without an initial
+bias toward some states being high or low frequency, the sampler cannot 'know'
+beforehand which state value corresponds to what population.
+
+
+# Extra credit
+
+Extend your implementation to:
+
+1. allow for an arbitrary $k$; and 
+2. account for admixture.
+
+
+## 1. Allow for an arbitrary $k$
+
+The code above has already been extended to handle situations where k > 2.
+Consider the following examples.
+
+```{r}
+n <- 1000
+nloci <- 10
+p <- c(.3, .2, .5)
+f <- rbind(runif(nloci)/10, (runif(nloci)+5)/10, (runif(nloci)+9)/10)
+
+pop <- makeElephants(n, p, f)
+x <- pop$x
+z <- pop$z
+```
+
+```{r}
+niter <- 100
+res <- gibbs(x=x, k=2, niter=niter)
+table(res$z[niter,],pop$z)
+res$Pi[niter,]
+```
+
+```{r}
+niter <- 100
+res <- gibbs(x=x, k=3, niter=niter)
+table(res$z[niter,],pop$z)
+res$Pi[niter,]
+```
+
+```{r}
+niter <- 100
+res <- gibbs(x=x, k=4, niter=niter)
+table(res$z[niter,],pop$z)
+res$Pi[niter,]
+```
+
+The sampler will return subpopulation frequencies and individual assignments
+based on the number $k$ of clusters specified beforehand.
+
+
+## 2. Account for admixture
+
+Re-implement some functions to account for admixture. $Z$ must become a matrix
+where each element corresponds to the origin at a particular locus.
+
+```{r}
+#' @param x an n by R matrix of data
+#' @param P a K by R matrix of allele frequencies
+#' @return an n by R matrix of group memberships for each allele
+sample_z_admixture <- function(x, P, Pi){
+  K <- nrow(P)
+  loglik_matrix <- apply(x, 1, log_pr_x_given_P, P=P)
+
+  lik_matrix <- exp(loglik_matrix)
+  lik_matrix <- lik_matrix * as.vector(Pi)
+
+  p.z.given.x <- apply(lik_matrix,2,normalize) # normalize columns
+
+  z <- matrix(0, nrow(x), ncol(x))
+  for(i in 1:nrow(z)) {
+    for(j in 1:ncol(z)) {
+      z[i,j] <- sample(1:K,size=1,prob=p.z.given.x[,i],replace=TRUE)
+    }
+  }
+  return(z)
+}
+
+#' @param x an n by R matrix of data
+#' @param z an n by R matrix of group memberships for each allele
+#' @return a k by R matrix of allele frequencies
+sample_P_admixture <- function(x,z,k){
+  R <- ncol(x)
+  P <- matrix(ncol=R,nrow=k)
+  for(i in 1:k){
+    sample_size <- colSums(apply(z == i, 2, as.numeric))
+    number_of_ones <- colSums(x * apply(z == i, 2, as.numeric))
+    P[i,] <- rbeta(R,1+number_of_ones,1+sample_size-number_of_ones) 
+  }
+  return(P)
+}
+
+#' @param z an n by R matrix of cluster allocations (1...k)
+#' @param k the number of clusters
+sample_pi_admixture <- function(z,k){
+  counts <- matrix(0, nrow=1, ncol=k)
+  for (i in 1:k) {
+    counts[i] <- sum(z==i)
+  }
+  Pi <- gtools::rdirichlet(1,counts+1)
+  return(Pi)
+}
+
+gibbs_admixture <- function(x, P=NULL, k = 2, niter = 100){
+  z <- matrix(sample(1:k,length(x),replace=TRUE),nrow=nrow(x),ncol=ncol(x))
+  Pi <- rep(1/k,k)
+
+  res <- list(z = list(), Pi = list())
+  res$z[[1]] <- z
+  res$Pi[[1]] <- Pi
+ 
+  pknown <- TRUE
+  if (is.null(P)){
+    pknown <- FALSE
+  }
+
+  for(i in 2:niter){
+    Pi <- sample_pi_admixture(z,k)
+    if (pknown == FALSE) {
+      P <- sample_P_admixture(x,z,k)
+    }
+    z <- sample_z_admixture(x,P,Pi)
+    res$z[[i]] <- z
+    res$Pi[[i]] <- Pi
+  }
+  if (pknown == FALSE) {
+    print(P)
+  }
+  return(res)
+}
+```
+
+
+```{r}
+# Generate the genotype and indicator for an elephant. For simplicity, only
+# allow 1 recombination point.
+makeAdmixedElephant <- function(z, f) {
+  k <- length(z)   # number of subpopulations
+  nloci <- ncol(f) # number of loci
+
+  subpopulation1 <- sample(seq(1, k), 1, prob=z)
+  subpopulation2 <- sample(seq(1, k), 1, prob=z)
+  recombination <- sample(seq(2, nloci-2), 1) # don't allow recombinations at endpoints...
+
+  elephant1 <- rbinom(f[subpopulation1,1:recombination], 1,
+                      f[subpopulation1,1:recombination])
+  elephant2 <- rbinom(f[subpopulation2,(recombination+1):nloci], 1,
+                      f[subpopulation2,(recombination+1):nloci])
+  
+  elephant <- c(elephant1, elephant2)
+  subpopulation <- c(rep(subpopulation1, recombination), rep(subpopulation2,
+                                                             nloci-recombination))
+
+  return(list(x=elephant, z=subpopulation))
+}
+
+# Generate genotypes and indicators for n elephants.
+makeAdmixedElephants <- function(n, z, f) {
+  genotypes <- matrix(0, n, ncol(f))
+  indicators <- matrix(0, n, ncol(f))
+  for (i in 1:n) {
+    elephant <- makeAdmixedElephant(z, f)
+    genotypes[i,] <- elephant$x
+    indicators[i,] <- elephant$z
+  }
+  return(list(x=genotypes, z=indicators))
+}
+```
+
+```{r}
+n <- 1000
+f1 <- c(.9, .9, .9, .9, .9, .9)
+f2 <- c(.1, .1, .1, .1, .1, .1)
+f <- rbind(f1, f2)
+p <- c(.2, .8)
+
+pop_mix <- makeAdmixedElephants(n, p, f)
+x <- pop_mix$x
+z <- pop_mix$z
+```
+
+```{r}
+niter <- 100
+res <- gibbs_admixture(x=x, k=2, niter=niter)
+table(res$z[[niter]],z)
+res$Pi[[niter]]
+```
+
+The Gibbs sampler when applied to samples with recent admixture (at most 1
+recombination in each genotype) and **stark** differences in subpopulation
+allele frequencies returns roughly the proportions of the original populations
+and finds differences between allele frequencies in each.
+
+The table at the bottom shows the proportion of correctly assigned loci. In
+this example, 4850 loci are correctly identified and 1150 misidentified, and
+85\% of forest loci and 70\% of savannah loci are correctly identified.
+
+```{r}
+sum(rowSums(z) == 12) + sum(rowSums(z) == 6) # number of genotypes without admixture
+```
+
+In the simulated data, 655 of 1000 individuals do not display any admixture,
+so 2070 loci are found in interbred individuals.
+
+Compare the effectiveness of the sampler for admixed versus non-admixed
+individuals.
+
+```{r}
+z_adm_gibbs <- res$z[[niter]][rowSums(z) != 12 & rowSums(z) != 6,]
+z_adm <- z[rowSums(z) != 12 & rowSums(z) != 6,]
+
+z_noadm_gibbs <- res$z[[niter]][rowSums(z) == 12 | rowSums(z) == 6,]
+z_noadm <- z[rowSums(z) == 12 | rowSums(z) == 6,]
+
+table(z_adm_gibbs, z_adm)
+table(z_noadm_gibbs, z_noadm)
+```
+
+For non-admixed individuals, the sampler correctly identifies 94\% of loci, and
+for admixed individuals, the accuracy drops to 56\%. For the latter group, the
+sampler isn't much better than a coin toss...
+
+The result improves if not estimating the allele frequencies.
+
+```{r}
+niter <- 100
+res <- gibbs_admixture(x=x, P=f, k=2, niter=niter)
+table(res$z[[niter]],z)
+res$Pi[[niter]]
+```
+
+```{r}
+z_adm_gibbs <- res$z[[niter]][rowSums(z) != 12 & rowSums(z) != 6,]
+z_adm <- z[rowSums(z) != 12 & rowSums(z) != 6,]
+
+z_noadm_gibbs <- res$z[[niter]][rowSums(z) == 12 | rowSums(z) == 6,]
+z_noadm <- z[rowSums(z) == 12 | rowSums(z) == 6,]
+
+table(z_adm_gibbs, z_adm)
+table(z_noadm_gibbs, z_noadm)
+```
+
+When $P$ is not being estimated, the assignments for the non-admixed
+individuals improve, but those for admixed ones remain poor.
+
+These results are for two starkly different subpopulations. The accuracy of the
+Gibbs sampler is largely lost when considering similar subpopulations.
+Consider the following example using admixed populations of forest and savannah
+elephants.
+
+```{r}
+n <- 1000
+fs <- c(0.40, 0.12, 0.21, 0.12, 0.02, 0.32)
+ff <- c(0.80, 0.20, 0.11, 0.17, 0.23, 0.25)
+f <- rbind(fs, ff)
+p <- c(.2, .8) # 20% savannah, 80% forest
+
+pop_mix <- makeAdmixedElephants(n, p, f)
+x <- pop_mix$x
+z <- pop_mix$z
+```
+
+```{r}
+niter <- 100
+res <- gibbs_admixture(x=x, k=2, niter=niter)
+table(res$z[[niter]],z)
+res$Pi[[niter]]
+```
+
+```{r}
+z_adm_gibbs <- res$z[[niter]][rowSums(z) != 12 & rowSums(z) != 6,]
+z_adm <- z[rowSums(z) != 12 & rowSums(z) != 6,]
+
+z_noadm_gibbs <- res$z[[niter]][rowSums(z) == 12 | rowSums(z) == 6,]
+z_noadm <- z[rowSums(z) == 12 | rowSums(z) == 6,]
+
+table(z_adm_gibbs, z_adm)
+table(z_noadm_gibbs, z_noadm)
+```
+
+The estimates for $P$, $\Pi$, and $Z$ are largely incorrect.
+
+The results improve if not estimating the allele frequencies.
+
+```{r}
+niter <- 100
+res <- gibbs_admixture(x=x, P=f, k=2, niter=niter)
+table(res$z[[niter]],z)
+res$Pi[[niter]]
+```
+
+```{r}
+z_adm_gibbs <- res$z[[niter]][rowSums(z) != 12 & rowSums(z) != 6,]
+z_adm <- z[rowSums(z) != 12 & rowSums(z) != 6,]
+
+z_noadm_gibbs <- res$z[[niter]][rowSums(z) == 12 | rowSums(z) == 6,]
+z_noadm <- z[rowSums(z) == 12 | rowSums(z) == 6,]
+
+table(z_adm_gibbs, z_adm)
+table(z_noadm_gibbs, z_noadm)
+```
+
+Here, the correct value for $\Pi$ is returned, and the assignments for
+non-admixed individuals are much better. The ones for admixed individuals are
+still poor, essentially a coin toss.
