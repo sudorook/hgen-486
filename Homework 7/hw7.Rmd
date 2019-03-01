@@ -1,0 +1,501 @@
+---
+title: "Homework 7"
+author: "Ansel George"
+output: pdf_document
+---
+
+```{r}
+library(ggplot2)
+
+set.seed(10)
+```
+
+
+# Poisson Processes
+
+## Haldane's Model of Recombination
+
+*Background: J.B.S. Haldane ([Wikipedia
+page](http://en.wikipedia.org/wiki/J._B._S._Haldane)) modeled the rate of
+crossovers as a Poisson process along a chromosome. As the number of crossovers
+expected in a given genomic tract can vary depending on where you are in the
+genome, Haldane used a distance measure referred to as genetic distance.
+Genetic distance is measured in units of Morgans (M), where a Morgan is defined
+such that there is one crossover event expected per Morgan (or 0.01 events per
+centiMorgan, cM). Note that Morgans may correspond to different physical
+distances depending on where you are in the genome.*
+
+*Answer the following questions:*
+
+### 1.
+*For a chromosome of length $t$ centiMorgans (cM), what is the mean and variance
+of the number of crossover events as a function of $t$?*
+
+For the sake of simplicity, the units for $t$ are left in Morgans.
+
+\begin{align}
+P(t) &= \frac{(\lambda t)^n}{n!}e^{-\lambda t} \\
+E[T] &= \sum_{i=0}^\infty n \frac{(\lambda t)^n}{n!}e^{-\lambda t} \\
+  &= \sum_{i=0}^\infty \frac{(\lambda t)^n}{(n-1)!}e^{-\lambda t} \\
+  &= \lambda t \sum_{i=0}^\infty \frac{(\lambda t)^{n-1}}{(n-1)!}e^{-\lambda t} \\ 
+  &= \lambda t \sum_{k=1}^\infty \frac{(\lambda t)^{n-1}}{(n-1)!}e^{-\lambda t}, \textrm{ where } k=i+1 \\
+  &= \lambda t \sum_{k=0}^\infty \frac{(\lambda t)^{n}}{(n)!}e^{-\lambda t} \\
+  &= \lambda t \\
+  &= \lambda t \rightarrow \frac{\lambda t}{100} \textrm{for t in units of cM}
+\end{align}
+
+\begin{align}
+Var[P(t)] &= E[T^2] - (E[T])^2 \\
+  &= E[T^2] - (\lambda t)^2 \\
+  &= \sum_{i=0}^\infty n^2 \frac{(\lambda t)^n}{n!}e^{-\lambda t}  - (\lambda t)^2 \\
+  &= \sum_{i=0}^\infty \frac{n (\lambda t)^n}{(n-1)!}e^{-\lambda t}  - (\lambda t)^2 \\
+  &= \lambda t \sum_{i=0}^\infty \frac{n (\lambda t)^{n-1}}{(n-1)!}e^{-\lambda t}  - (\lambda t)^2 \\ 
+  &= \lambda t \sum_{i=0}^\infty \frac{(n-1+1)(\lambda t)^{n-1}}{(n-1)!}e^{-\lambda t}  - (\lambda t)^2 \\ 
+  &= \lambda t \Bigg( \sum_{i=0}^\infty \Big( \frac{(\lambda t)^{n-1}}{(n-2)!}e^{-\lambda t} + \frac{(\lambda t)^{n-1}}{(n-1)!}e^{-\lambda t} \Big) \Bigg)  - (\lambda t)^2 \\ 
+  &= \lambda t \Big( \lambda t \sum_{i=0}^\infty \frac{(\lambda t)^{n-2}}{(n-2)!}e^{-\lambda t} + \sum_{i=0}^\infty \frac{(\lambda t)^{n-1}}{(n-1)!}e^{-\lambda t} \Big)  - (\lambda t)^2 \\ 
+  &= \lambda t (\lambda t + 1)  - (\lambda t)^2 \\ 
+  &= \lambda t \rightarrow \frac{\lambda t}{100} \textrm{for t in units of cM}
+\end{align}
+
+### 2.
+*Given that a single crossover occurs along a chromosome of length $t$, provide
+a proof based on the basic properties of a Poisson Process that the location of
+the crossover is uniformly distributed on $(0, t]$.*
+
+For $0 < s < t$,
+
+\begin{align}
+P(S < s | N_t = 1) &= \frac{P(S < s, N_t=1)}{P(N_t=1)} \\
+  &= \frac{P(N_s=1, N_t-N_s=0)}{P(N_t=1)} \\
+  &= \frac{\lambda s e^{-\lambda s} e^{-\lambda(t-s)}}{\lambda t e^{-\lambda t}} \\
+  &= \frac{s}{t} \\
+\implies p(S = s | N_t = 1) &= \frac{d}{ds}\frac{s}{t} \\
+  &= \frac{1}{t}
+\end{align}
+
+The distribution for $P(S < s | N_t = 1)$ is the CDF of a uniform distribution
+over $(0,t]$, so $S \sim \textrm{Unif}(0,t)$.
+
+
+### 3.
+*For a chromosome of length 3 Morgans (e.g. chromosome one in humans):*
+
+* *What is the probability that there are no crossovers? Define the random
+  variable $C$ as the number of crossovers.*
+
+\begin{align}
+P(C = 0) &= P(N(t)=0) = e^{-3}
+\end{align}
+
+* *What is the expected number of crossovers, $\mathbb{E}[C]$?*
+
+\begin{align}
+E[C] &= E[N(t)] = 3
+\end{align}
+
+* *What is the probability of $\mathbb{E}[C]$ or more crossovers?*
+
+\begin{align}
+P(C > E[C]) &= P(C > 3) \\
+  &= \sum_{n=3}^\infty \frac{3^n e^{-3}}{n!} \\
+  &= 1 - \sum_{n=0}^2 \frac{3^n e^{-3}}{n!} \\
+  &= 1 - e^{-3} - \frac{3^1}{1!}e^{-3} - \frac{3^2}{2!} e^{-3} \\
+  &= 1 - e^{-3} - 3e^{-3} - \frac{9}{2} e^{-3} \\
+  &= 1 - 8.5 e^{-3} \\
+  &= 0.5768099
+\end{align}
+
+### 4.
+*Consider a location with a new mutation on a chromosome. As that chromosome is
+passed down through $k$ rounds of meiosis, what is the distribution to the
+distance to the first crossover to the right of the mutation?*
+
+Assuming the location $s$ of the new mutation is uniformly distributed over the
+chromosome of length $L$, the distribution of crossovers on either side of the
+mutation will both be Poisson distributed thinning processes with parameters
+$s$ and $L-s$, and thereby have a joint distribution $\sim Poi(L)$.
+
+The distribution for $k$ crossovers is the sum of $k$ Poisson processes, which
+produces a new Poisson process $\sim Poi(kL)$.
+
+The distribution for the waiting 'time' between the mutation and the first
+crossover event to its right is as follows:
+
+\begin{align}
+P(T > t) &= P(N(t) = 0) \\
+  &= \frac{k(L-s)^0}{0!}e^{-k(L-s)t} \\
+  &= e^{-k(L-s)t} \\
+\implies P(T < t) &= 1 - e^{-k(L-s)t} \\
+\implies p(T=t ) &= \frac{d}{dt} \big( 1-e^{-k(L-s)t} \big) \\
+  &= k(L-s)e^{-k(L-s)t}
+\end{align}
+
+This is exponentially distributed with rate parameter $k(L-s)$.
+
+The expected value for this distribution is $\frac{1}{k(L-s)}$, the expectation
+for an exponential. This number, the expected crossover site per unit length,
+multiplied by the distance the right of the mutation, $L-s$, yields:
+
+\begin{align}
+E[distance] &= \frac{1}{k}
+\end{align}
+
+Also, consider the following simulation of crossovers. Plotted are simulated
+expected values for the distances to nearest crossover sites (right or left)
+for various values of $k$.
+
+```{r}
+runMeiosis <- function(N, k, L=1, x=0.5) {
+  r <- matrix(0, N, k) # N replicates for 1:k values for k
+  l <- matrix(0, N, k)
+  for (i in 1:N) {
+    for (j in 1:k) {
+      d <- runif(L*j, 0, L) - x
+      r[i,j] <- min(d[d>0])
+      l[i,j] <- max(d[d<0])
+
+      # Add NAs so that mean() will ignore columns where the number of
+      # crossovers on the left or right side is 0.
+      if (is.infinite(r[i,j])) {
+        r[i,j] <- NA
+      }
+      if (is.infinite(l[i,j])) {
+        l[i,j] <- NA
+      }
+    }
+  }
+  return(list(r=r,l=l))
+}
+```
+
+```{r, warning=FALSE}
+N <- 100
+crossoverRate <- 100
+L <- 10
+x0 <- 4
+res <- runMeiosis(N, crossoverRate, L, x0)
+r <- res$r
+l <- res$l
+
+k <- seq(1,crossoverRate)
+
+plot(k, apply(r, 2, mean))
+lines(k, 1/k)
+```
+
+
+### 5.
+*Consider the distance between the first crossover to the left of the mutation
+and the first crossover to the right of the mutation. What is the expected
+length of this distance as function of $k$?*
+
+First, evaluate the expected distance for the left. This follows a similar
+argument to that of the right, but with the exponential rate parameter $ks$
+instead of $k(L-s)$:
+
+\begin{align}
+P(T > t) &= P(N(t) = 0) \\
+  &= \frac{ks^0}{0!}e^{-kst} \\
+  &= e^{-kst} \\
+\implies P(T < t) &= 1 - e^{-kst} \\
+\implies p(T=t ) &= \frac{d}{dt} \big(1 - e^{-kst} \big) \\
+  &= kse^{-kst}
+\end{align}
+
+The distance is exponentially distributed with rate parameter $ks$.
+
+The expected value for this distribution is $\frac{1}{ks}$, the expectation for
+an exponential. This number, multiplied by the distance to the left of the
+mutation, $s$, yields:
+
+\begin{align}
+E[distance] &= \frac{1}{k}
+\end{align}
+
+Consider the simulation for left-side mutations:
+
+```{r}
+plot(k, apply(-l, 2, mean))
+lines(k, 1/k)
+```
+
+Given then that the two intervals $(0,s]$ and $(s,L]$ are independent, the
+expectation of the distance between the two is equal sum of the expectations of
+the distances of the two.
+
+\begin{align}
+E[right + left] &= E[right] + E[left] \\
+  &= \frac{1}{k} + \frac{1}{k} \\
+  &= \frac{2}{k}
+\end{align}
+
+See the plot for the mean distances for various values of $k$ below.
+
+```{r}
+plot(k, apply(r-l, 2, mean))
+lines(k, 2/k)
+```
+
+### 6.
+*If an odd number of crossovers occur between two locations separated by
+distance $d$ on a chromosome then a recombination event occurs. Calculate the
+probability of at least one recombination event occurring as a function of
+$d$.*
+
+\begin{align}
+P(\textrm{at least 1 recombination}) &= 1 - P(\textrm{no recombinations}) \\
+  &= 1 - P(\textrm{even no. of crossovers})
+\end{align}
+
+\begin{align}
+P(\textrm{even}) &= e^{-d} \Big(\frac{d^0}{0!} + \frac{d^2}{2!} + \frac{d^4}{4!} + \frac{d^6}{6!} + \dots \Big) \\
+  &= e^{-d} \sum_{m=0}^{\infty} \frac{d^{2m}}{2m!} \\
+  &= e^{-d} \Big( \frac{e^d + e^{-d}}{2} \Big) \\
+  &= \frac{1 + e^{-2d}}{2} \\
+\implies P(odd) &= 1 - \frac{1 + e^{-2d}}{2} \\
+  &= \frac{1 - e^{-2d}}{2}
+\end{align}
+
+
+## Cancer cell population model
+
+*Background: Consider modeling cancer cells entering the blood/circulatory
+systems as a non-homogeneous Poisson Process. In particular, suppose there is a
+source cancer cell population whose size is growing deterministically. More
+specifically, assume $x(t)$, the size of the source population at time $t$, is
+growing exponentially at rate $r$ per hour (i.e. $x(t) = x_0 e^{rt}$ ) where
+$x_{0}$ is the starting size of the population. An expected fraction $m$ (for $0
+\leq m \leq 1$) of that cancer population is entering the blood/circulatory
+system, such that cancer cells enter the blood as a Poisson Process with an
+instantaneous rate of $mx(t)$ per hour.*
+
+*Answer the following questions:*
+
+### 1. 
+*Provide an expression for the probability distribution on the number of cancer
+cells in the blood after $t$ hours.*
+
+Given $m(t)$:
+
+\begin{align}
+m(t) &= \int_{0}^t mx_{0}e^{rs} ds \\
+  &= \frac{mx_{0}}{r}\big(e^{rt} -1 \big) \\
+\end{align}
+
+The probability of $n$ cancer cells at time $t$ is given by the nonhomogeneous
+Poisson distribution:
+
+\begin{align}
+P(N(t)=n) &= \frac{{m(t)}^n}{n!} e^{m(t)} \\
+  &= \frac{{\Big(\frac{mx_{0}}{r}\big(e^{rt} -1 \big)\Big)}^n}{n!} e^{\frac{mx_{0}}{r}\big(e^{rt} -1 \big)}
+\end{align}
+
+
+### 2.
+*If $x_0 = 10$, $r = 0.01$, and $m = 0.0001$, at what time is there a 99\%
+probability that the blood will have received 1000 cancer cells?*
+
+To solve this unwieldy equation for $t$ when $n=1000$ and $P(N(t)=1000)=.99$,
+solve for the roots of the expression $P(N(t)=1000)-.99 = 0$.
+
+Due to numerical issues, the solution is approximated first by using `qpois` to
+solve for the rate parameter that corresponds to $P(N(t)=1000)=.99$.
+
+```{r}
+mt <- function(t) {
+  x0 <- 10
+  r <- .01
+  m <- .0001
+  return((m*x0/r)*(exp(r*t)-1))
+}
+
+findZero <- function(t) {
+  return(ppois(1000, t, lower.tail=F)-.99)
+}
+
+logFactorial <- function(x) {
+  return(sum(log(seq(1,x))))
+}
+```
+
+```{r}
+x0 <- 10
+r <- .01
+m <- .0001
+
+root <- uniroot(findZero, c(1,2000))$root
+
+log((root*r/x0/m)+1)/r
+```
+
+The value of $t \approx 928.3748$ hours.
+
+
+### 3.
+*Suppose that the probability a cancer cell in the blood is still living at time
+$t$ is determined by an exponential function of its arrival time to the blood
+and a death rate of $\mu$ per hour and, i.e.*
+
+\begin{align}
+P{\textrm{living}}(t) = e^{-\mu t}
+\end{align}
+
+*Provide a general form for the number of living cancer cells in the blood at
+time $t$.*
+
+\begin{align}
+m(t) &= \int_{0}^t mx_{0}e^{rs} e^{-\mu (t-s)} ds \\
+  &= mx_0 e^{-\mu t} \int_{0}^t e^{rs} e^{\mu(s)} ds \\
+  &= mx_0 e^{-\mu t} \int_{0}^t e^{(r+\mu)s} ds \\
+  &= \frac{mx_0}{r+\mu} e^{-\mu t} \big( e^{(r+\mu)t} - 1 \big) \\
+  &= \frac{mx_0}{r+\mu} \big( e^{rt} - e^{-\mu t} \big)
+\end{align}
+
+The probability distribution follows the same Poisson type of distribution, but
+it is even more unwieldy:
+
+\begin{align}
+P(N(t)=n) &= \frac{{m(t)}^n}{n!} e^{m(t)} \\
+  &= \frac{{\Big( \frac{mx_0}{r+\mu} \big( e^{rt} - e^{-\mu t} \big) \Big)}^n}{n!} e^{ \frac{mx_0}{r+\mu} \big( e^{rt} - e^{-\mu t} \big) }
+\end{align}
+
+
+### 4.
+Repeat part 2 but address when the blood will have 1000 living cancer cells.
+Assume $\mu = 0.01$.
+
+```{r}
+mt2 <- function(t) {
+  x0 <- 10
+  r <- .01
+  m <- .0001
+  mu <- .01
+  return(m*x0/(r+mu) * (exp((r)*t) - exp(-mu*t) ))
+}
+
+mt2zero <- function(t) {
+  x0 <- 10
+  r <- .01
+  m <- .0001
+  mu <- .01
+  
+  # 1076.07 is the value of lambda that is > 1000 with probability .99. Find
+  # the root for the exponential.
+  return(m*x0/(r+mu) * (exp((r)*t) - exp(-mu*t) ) - 1076.07)
+}
+```
+
+```{r}
+x0 <- 10
+r <- .01
+m <- .0001
+mu <- .01
+
+# uniroot(mt2zero, c(1,2000))$root
+100*asinh(root*(r+mu)/m/x0/2)
+```
+
+$t \approx 997.6803$ hours in this scenario.
+
+
+### 5.
+*An assumption of a Poisson Process is that arrivals are rare enough that at
+most one arrival is expected in a given $\Delta t$ unit of time as $\Delta t$
+goes to zero. Keeping this in mind --- when might we expect the Poisson Process
+to fail as an approximation for modeling cancer cell counts in the blood? (A
+conceptual/verbal answer is okay, extra credit for a more precise answer).*
+
+Several assumptions must be met for the Poisson approximation to hold.
+
+(i) $N(0) = 0$
+
+(ii) $N(t), t \geq 0$ has stationary and independent increments
+
+(iii) $P[ N(t + h) - N(t) \geq 2 ] = o(h)$
+
+(iv) $P[ N(t + h) - N(t) = 1 ] = \lambda h + o(h)$
+
+These assumptions can be violated if, for example:
+
+ * Cancer cell counts are contingent on prior population history, possible due
+   to immune system response. Violates (ii).
+ * The fraction of cells entering the blood is high relative to the growing
+   population. Violates (iii, iv).
+ * Cells are not released into the bloodstream as a random Bernoulli trial with
+   low probability of emission and large sample size. Violates (iii, iv).
+ * There are already cancer cells in the bloodstream. Violates (i).
+ * The initial tumor population size in the tissue is small.
+
+In the above problems, the emission rate $m$ for a given population size $x(t)$
+is low, so the Poisson approximation is valid. The true distribution would
+treat the population x(t) as finite and model every emission into the
+bloodstream as also a loss in the tumor population. To test the goodness of fit
+for the Poisson model, one would use a likelihood ratio test ($\chi^2$)
+comparing true values of the population sizes or, if not available, data
+sampled from populations.
+
+
+# Project Ideas
+
+*Write a paragraph describing your current idea for the final project.*
+
+*If you are planning to do a research project:*
+
+ * *Define the biological problem or question that you are addressing.*
+ * *Outline (broadly) the statistical models and/or algorithms that you will
+   use to address your biological problem or question.*
+
+*If you are planning to provide a teaching resource:*
+
+ * *Define the subject area(s) that you will address.*
+ * *Outline (broadly) materials that you will develop.*
+
+
+I have a couple ideas. They are still inchoate at best.
+
+
+## Idea 1 (research?)
+
+I happened upon *The Population Consequences of Life History Phenomena*, and
+it's giving me some ideas.
+
+The broad question is what are the dynamics of changes populations
+(birth/death) can be modelled as continuous-time Markov chains. My thinking is
+to:
+
+* Build matrix representations for continuous time Markov chains for
+  populations in an ecosystem.
+
+* Many of the equations use an odd notation, and I think they would be very
+  amenable to conversion to forms we learned in lecture and subsequent
+  analysis (eigendecomposition, exploiting matrix structure, etc).
+
+I wouldn't really call this research, as I suspect many, many theoretical
+ecologist have already built and published more sophisticated models than I
+know of and that run more efficiently than what I would make. My motivation
+doing this is to become better at reading, implementing, and ultimately
+understanding matrix notations for complex systems. I don't have a particular
+research question I want to investigate or any data, for that matter.
+
+
+## Idea 2 (teaching resource)
+
+Add some vignettes to the website on how to deal with numerical errors. Not
+really the purview of the course, but on many problems, we had to adjust our
+computations to deal with under/overflow or simply abandon self-coded methods
+and look for other (likely system/package functions) ones that somehow
+successfully compute what we need.
+
+Topics to cover:
+
+ * Overview of why numerical errors accumulate
+ * Strategies for accounting for them: by hand (renormalizing,
+   log-transformation)
+ * Using system functions instead (I don't grok R, so I will have to look
+   things up and hope that I can understand...)
+ * Assessing errors in computations
+
+Numerical stability and other low-level topics are well outside my wheelhouse,
+so I don't know now how well I can pull this off. All I know is how annoying it
+is to run into numerical errors while coding up solutions and trying to figure
+out how to control them.
