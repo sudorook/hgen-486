@@ -1,0 +1,963 @@
+---
+title: "Problem Set 5"
+author: "Ansel George"
+output: pdf_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+set.seed(10)
+```
+
+# Hidden Markov Models
+
+Consider fitting a two-state hidden Markov model (HMM) to the binarized data.
+The idea is that the two hidden states represent “open” and “closed” states. In
+an “open” state, there is a higher probability of emitting a 1 than in the
+“closed” state. Because probabilities are constrained to sum to one, there are
+essentially only four major parameters in this model (aside from the initial
+state probability). A student colleague of yours (*wishful thinking*) has
+obtained MLE values for these parameters:
+
+– MLEs of emission probabilities:
+
+\begin{align*}
+Pr(X_t = 1|Z_t = \textrm{open}) = 0.5125 \\
+Pr(X_t = 1|Z_t = \textrm{closed}) = 0.07797
+\end{align*}
+
+– MLEs of transition probabilities:
+
+\begin{align*}
+Pr(Z_{t+1} = \textrm{open} |Z_t = \textrm{open}) = 0.8675 \\
+Pr(Z_{t+1} = \textrm{closed} |Z_t = \textrm{closed}) = 0.9605
+\end{align*}
+
+– Assume that the initial state probabilities are consistent with:
+
+\begin{align*}
+P(Z_1 = \textrm{open}) = 0.5
+\end{align*}
+
+
+
+## 1.
+Implement the forward algorithm for the described HMM. Using these parameter
+values, compute the probability of the observed Potts data. Spot-check that
+these are good MLE values by comparing the likelihood you obtain against three
+sets of random values for the four MLE parameter values. Also, test parameter
+values that are slight perturbations from the given MLEs to check that the
+likelihood does not increase. (If the likelihood does increase, the increase
+should not be substantial.)
+
+\begin{align}
+A &= \left[ \begin{array}{cc} 0.8675 & 0.1325 \\ 0.0395  & 0.9605  \end{array} \right] \\
+B &= \left[ \begin{array}{cc} 0.5125 & 0.4875 \\ 0.07797 & 0.92203 \end{array} \right] \\
+\pi_0 &= \left[ \begin{array}{c} 0.5 \\ 0.5 \end{array} \right]
+\end{align}
+
+```{bash}
+wget -nc https://raw.githubusercontent.com/stephens999/hgen48600/master/data/potts/Test_region_NOM37_methylation_C_in_GpC_hg38_chr9_131946471_134832670.bed
+```
+
+```{r}
+methyldata <-
+  read.table(file="Test_region_NOM37_methylation_C_in_GpC_hg38_chr9_131946471_134832670.bed",
+             stringsAsFactors=F, header=F)
+
+binarydata <- 1*(methyldata$V7>0)
+```
+
+```{r}
+# wonkysum <- function(x) {
+#   y <- seq(0, 1, length(x))
+#   for (i in 1:length(x)) {
+#     y[i] <- sum(x[1:i])
+#   }
+#   return(y)
+# }
+
+# Compute the likelihood with the forward algorithm. Uses a scaling factor to
+# renormalize the likelihoods with each step. Returns the log-likelihood for
+# the total dataset.
+computeForward <- function(A, B, p, x) {
+  N <- length(x)
+  k <- ncol(B)
+  alpha <- matrix(0, N, k)
+  ct <- rep(0, N) # normalizing factor for avoiding underflow
+
+  alpha[1,] <- p * B[,(2-x[1])]
+  ct[1] <-  sum(alpha[1,])
+  alpha[1,] <- alpha[1,] / ct[1]
+
+  for (t in 1:(N-1)) {
+    m <- alpha[t,] %*% A
+    alpha[t+1,] <- m * B[,(2-x[t])]
+    ct[t+1] <- sum(alpha[t+1,])
+    alpha[t+1,] <- alpha[t+1,] / ct[t+1]
+  }
+  
+  return(sum(log(ct)))
+  # return(wonkysum(log(ct)))
+}
+```
+
+```{r}
+A <- matrix(c(.8675, .0395, .1325, .9605), nrow=2)
+B <- matrix(c(.5125, .07797, .4875, .92203), nrow=2)
+p <- c(.5, .5)
+```
+
+```{r}
+ll <- computeLogForward(A, B, p, binarydata)
+sum(ll[nrow(ll),])
+```
+
+The log-likelihood for the observed data and parameters is -33422.39. 
+
+
+Random parameter set 1:
+```{r}
+A1 <- runif(2)
+A1 <- cbind(A1, 1-A1)
+B1 <- runif(2)
+B1 <- cbind(B1, 1-B1)
+print(A1)
+print(B1)
+
+computeForward(A1, B1, p, binarydata)
+```
+
+The log-likelihood is much lower for this random matrix than for the given ones.
+
+
+Random parameter set 2:
+```{r}
+A2 <- runif(2)
+A2 <- cbind(A2, 1-A2)
+B2 <- runif(2)
+B2 <- cbind(B2, 1-B2)
+print(A2)
+print(B2)
+
+computeForward(A2, B2, p, binarydata)
+```
+
+The log-likelihood is much lower for this random matrix than for the given ones.
+
+
+Random parameter set 3:
+```{r}
+A3 <- runif(2)
+A3 <- cbind(A3, 1-A3)
+B3 <- runif(2)
+B3 <- cbind(B3, 1-B3)
+print(A3)
+print(B3)
+
+computeForward(A3, B3, p, binarydata)
+```
+
+The log-likelihood is much lower for this random matrix than for the given ones.
+
+
+Small perturbation of MLEs of emission and transition probabilities set 1:
+```{r}
+x <- runif(2, -.005, .005) 
+A4 <- cbind(A[,1] + x, A[,2] - x)
+x <- runif(2, -.005, .005) 
+B4 <- cbind(B[,1] + x, B[,2] - x)
+print(A4)
+print(B4)
+
+computeForward(A4, B4, p, binarydata)
+```
+
+The log-likelihood is very close to that of the purported MLEs. The MLEs are
+still more likely.
+
+
+Small perturbation of MLEs of emission and transition probabilities set 2:
+```{r}
+x <- runif(2, -.005, .005) 
+A5 <- cbind(A[,1] + x, A[,2] - x)
+x <- runif(2, -.005, .005) 
+B5 <- cbind(B[,1] + x, B[,2] - x)
+print(A5)
+print(B5)
+
+computeForward(A5, B5, p, binarydata)
+```
+
+The log-likelihood is very close to that of the purported MLEs. The MLEs are
+still more likely.
+
+
+## 2.
+Using the parameter values specified above, provide a maximum a posteriori
+decoding of the sequence, i.e. specify which states in the sequence are “open”
+and “closed”. Do so by implementing the Viterbi algorithm.
+
+```{r}
+computeViterbi <- function(A, B, p, x) {
+  N <- length(x)
+  K <- ncol(B)
+  delta <- matrix(0, N, K) # store likelihoods for current step along chain
+  psi <- matrix(0, N, K) # store previous state that generated maximum
+
+  # use log-likelihoods to avoid underflow issues
+  delta[1,] <- log(p) + log(B[,(2-x[1])])
+
+  for (t in 1:(N-1)) {
+    for (k in 1:K) {
+      m <- delta[t,] + log(A[k,]) + log(B[,(2-x[t])])
+      delta[t+1,k] <- max(m)
+      psi[t+1,k] <- which(m == max(m))
+    }
+  }
+
+  # Generate the most likely path.
+  xt <- seq(0, 1, N)
+  zt <- which(delta[N,] == max(delta[N,]))
+  xt[N] <- zt
+  for (t in N:2) {
+    zt <- psi[t,zt]
+    xt[t-1] <- zt
+  }
+
+  # Convert values (1 and 2) to state names (Closed and Open).
+  path <- c()
+  for (i in xt) {
+    if (i == 2) {
+      path <- c(path, "Closed")
+    } else if (i == 1) {
+      path <- c(path, "Open")
+    }
+  }
+ 
+  return(path)
+}
+```
+
+```{r}
+path <- computeViterbi(A, B, p, binarydata)
+path[1:100] # be kind to printers; when the machines rise up, they will remember...
+```
+
+
+## 3.
+Extra-credit: Implement your own Baum-Welch algorithm and verify these
+MLEs.
+
+The `computeForward` function used above only outputs the maximum likelihood
+for the data by using a trick with the normalization constant. For Baum-Welch,
+all values of $\alpha_i(t)$ are needed, so below is a reimplementation that
+will output a matrix with all relevant data for forward and backward
+algorithms.
+
+For validation purposes...
+
+```{r}
+library(HMM)
+hmm <- initHMM(c("Open","Closed"), c("1","0"), transProbs=A, emissionProbs=B)   
+# hmm <- initHMM(c("1","0"), c("1","0"), transProbs=A, emissionProbs=B)   
+
+hmm_alpha <- forward(hmm, as.character(binarydata))
+hmm_beta <- backward(hmm, as.character(binarydata))
+hmm_path <- viterbi(hmm, as.character(binarydata))
+hmm_bw <- baumWelch(hmm, as.character(binarydata)[1:1000])
+```
+
+
+```{r}
+computeLogForward <- function(A, B, p, x) {
+  N <- length(x)
+  K <- ncol(B)
+  alpha <- matrix(0, N, K)
+
+  alpha[1,] <- log(p) + log(B[,(2-x[1])])
+  for (t in 1:(N-1)) {
+    for (k in 1:K) {
+      a <- max(alpha[t,] + log(A[,k]))
+      m <- a + log( sum( exp(alpha[t,] + log(A[,k]) - a) ) )
+      alpha[t+1,k] <- m + log(B[k,(2-x[t])])
+    }
+  }
+  
+  return(alpha)
+}
+
+computeLogBackward <- function(A, B, p, x) {
+  N <- length(x)
+  K <- ncol(B)
+  beta <- matrix(0, N, K)
+
+  beta[N,] <- log(rep(1,K))
+  for (t in (N-1):1) {
+    for (k in 1:K) {
+      a <- max(beta[t+1,] + log(A[k,]) + log(B[1:k,(2-x[t+1])]) )
+      beta[t,k] <- a + log( sum( exp(beta[t+1,] + log(A[k,]) +
+                                     log(B[1:k,(2-x[t+1])]) - a) ) )
+    }
+  }
+  
+  return(beta)
+}
+```
+
+Next are the functions used for the EM iterations.
+
+```{r}
+# Take the current values for A, B, and p. Compute their likelihoods and their
+# MLEs, which are then used to calculate a new set of A, B, and p. Those are
+# then returned.
+updateEM <- function(A, B, p, x) {
+  alphas <- computeLogForward(A, B, p, x)
+  betas <- computeLogBackward(A, B, p, x)
+
+  N <- length(x)
+  K <- ncol(A)
+
+  ab <- alphas + betas
+  a <- apply(ab, 1, max)
+  gammas <- ab - a - log(rowSums(exp(alphas + betas - a)))
+  gammas <- exp(gammas)
+
+  xilist <- list()
+  for (t in 1:(N-1)) {
+    xi <- matrix(0, K, K)
+    for (i in 1:K) {
+      for (j in 1:K) {
+        xi[i,j] <- alphas[t,i] + log(A[i,j]) + betas[t+1,j] + log(B[j,(2-x[t])])
+      }
+    }
+    a <- max(xi)
+    xi <- xi - a - log( sum( exp(xi - a) ) )
+    xilist[[t]] <- exp(xi)
+  }
+
+  xis <- matrix(unlist(xilist), ncol=4, byrow=TRUE)
+
+  # A_new <- matrix(0,K,K)
+  # for (i in 1:K) {
+  #   for (j in 1:(K*K)) {
+  #     A_new[i,j] <- sum(xis[,j])/sum(gammas[,i])
+  #   }
+  # }
+
+  aii <- sum(xis[,1])/sum(gammas[,1])
+  aij <- sum(xis[,2])/sum(gammas[,1])
+  aji <- sum(xis[,3])/sum(gammas[,2])
+  ajj <- sum(xis[,4])/sum(gammas[,2])
+  A_new <- matrix(c(aii, aij, aji, ajj), nrow=2, byrow=TRUE)
+  
+  # B_new <- matrix(0,K,K)
+  # for (i in 1:K) {
+  #   for (j in 1:K) {
+  #     B_new[i,j] <- sum(gammas[(x == 2-i),j]) / sum(gammas[,j])
+  #   }
+  # }
+  bii <- sum(gammas[(x == 1),1]) / sum(gammas[,1])
+  bij <- sum(gammas[(x == 0),1]) / sum(gammas[,1])
+  bji <- sum(gammas[(x == 1),2]) / sum(gammas[,2])
+  bjj <- sum(gammas[(x == 0),2]) / sum(gammas[,2])
+  B_new <- matrix(c(bii, bij, bji, bjj), nrow=2, byrow=TRUE)
+
+  p_new <- gammas[1,]
+  return(list(A_new, B_new, p_new))
+}
+
+updateEM2 <- function(A, B, p, x) {
+  N <- length(x)
+  K <- ncol(A)
+  
+  hmm <- initHMM(c("Open","Closed"), c("1","0"), transProbs=A, emissionProbs=B)   
+  alphas <- matrix(unlist(forward(hmm, as.character(x))), ncol=2, byrow=T)
+  betas <- matrix(unlist(backward(hmm, as.character(x))), ncol=2, byrow=T)
+
+  # Compute Gammas
+  ab <- alphas + betas
+  a <- apply(ab, 1, max)
+  gammas <- ab - a - log(rowSums(exp(alphas + betas - a)))
+  gammas <- exp(gammas)
+
+  # compute Xi's
+  xilist <- list()
+  for (t in 1:(N-1)) {
+    xi <- matrix(0, 2, 2)
+    for (i in 1:K) {
+      for (j in 1:K) {
+        xi[i,j] <- alphas[t,i] + log(A[i,j]) + betas[t+1,j] + log(B[j,(2-x[t])])
+      }
+    }
+    a <- max(xi)
+    xi <- xi - a - log( sum( exp(xi - a) ) )
+    xilist[[t]] <- exp(xi)
+  }
+
+  xis <- matrix(unlist(xilist), ncol=4, byrow=TRUE)
+
+  aii <- sum(xis[,1])/sum(gammas[,1])
+  aij <- sum(xis[,2])/sum(gammas[,1])
+  aji <- sum(xis[,3])/sum(gammas[,2])
+  ajj <- sum(xis[,4])/sum(gammas[,2])
+  A_new <- matrix(c(aii, aij, aji, ajj), nrow=2, byrow=TRUE)
+
+  bii <- sum(gammas[(x == 1),1]) / sum(gammas[,1])
+  bij <- sum(gammas[(x == 0),1]) / sum(gammas[,1])
+  bji <- sum(gammas[(x == 1),2]) / sum(gammas[,2])
+  bjj <- sum(gammas[(x == 0),2]) / sum(gammas[,2])
+  B_new <- matrix(c(bii, bij, bji, bjj), nrow=2, byrow=TRUE)
+
+  p_new <- gammas[1,]
+  return(list(A_new, B_new, p_new))
+}
+
+computeBaumWelch <- function(A, B, p, x) {
+  ll <- c()
+  A_cur <- A
+  B_cur <- B
+  p_cur <- p
+  
+  l <- computeLogForward(A_cur, B_cur, p_cur, x)
+  ll <- append(ll, sum(l[nrow(l),])) 
+  delta_ll <- ll[1]
+
+  counter <- 1
+  while(abs(delta_ll) > .001 ) {
+    values <- updateEM(A_cur, B_cur, p_cur, x)
+    # values <- updateEM2(A_cur, B_cur, p_cur, x)
+    A_cur <- values[[1]]
+    B_cur <- values[[2]]
+    p_cur <- values[[3]]
+    l <- computeLogForward(A_cur, B_cur, p_cur, x)
+    ll <- c(ll,sum(l[nrow(l),]))
+    delta_ll <- (ll[length(ll)]) - (ll[length(ll)-1])
+    print(paste(counter, ": ", ll[length(ll)], ", ", delta_ll, sep=""))
+    if (counter > 100) {
+      break
+    } else {
+      counter <- counter + 1
+    }
+  }
+  print("Done")
+  return(list(A_cur, B_cur, p_cur))
+}
+```
+
+```{r}
+A <- matrix(c(.5, .5, .5, .5), nrow=2)
+B <- matrix(c(.5, .5, .5, .5), nrow=2)
+p <- c(.5, .5)
+
+results <- computeBaumWelch(A, B, p, binarydata)
+results
+```
+
+When the given probabilities are all equal, the Baum-Welch algorithm fails
+because the computed alpha and betas return the same values. This causes the
+update stem in the EM to keep the same values, causing the Baum-Welch algorithm
+to terminate because it sees that the previous and current log likelihoods are
+equivalent.
+
+
+```{r}
+A <- matrix(c(.5, .8, .5, .2), nrow=2)
+B <- matrix(c(.4, .7, .6, .3), nrow=2)
+p <- c(.5, .5)
+
+computeForward(A,B,p,binarydata)
+
+results <- computeBaumWelch(A, B, p, binarydata)
+
+A_new <- results[[1]]
+B_new <- results[[2]]
+p_new <- results[[3]]
+
+A_new
+B_new
+p_new
+
+computeForward(results[[1]], results[[2]], results[[3]], binarydata)
+```
+
+The solution has much higher likelihood based on the forward algorithm, but the
+computed transition matrix does not match the given MLE parameters.
+
+This could be due to several reasons, such as multiple optima, but given that
+the results from the HMM package match, it is more likely that either the
+`computeBaumWelch` implementation is wrong or made in a way such that
+significant errors sneak in to the computation.
+
+```{r}
+hmm_bw
+```
+
+
+
+```{r}
+A <- matrix(c(.8675, .0395, .1325, .9605), nrow=2)
+B <- matrix(c(.5125, .07797, .4875, .92203), nrow=2)
+p <- c(.5, .5)
+
+computeForward(A,B,p,binarydata)
+
+results <- computeBaumWelch(A, B, p, binarydata)
+
+A_new <- results[[1]]
+B_new <- results[[2]]
+p_new <- results[[3]]
+
+A_new
+B_new
+p_new
+
+computeForward(results[[1]], results[[2]], results[[3]], binarydata)
+```
+
+
+# MCMC
+
+From the provided code:
+
+```{r}
+target <- function(x){
+  if(x<0){
+    return(0)}
+  else {
+    return( exp(-x))
+  }
+}
+
+easyMCMC <- function(niter, startval, proposalsd){
+  x <- rep(0,niter)
+  x[1] <- startval
+  for(i in 2:niter){
+    currentx <- x[i-1]
+    proposedx <- rnorm(1,mean=currentx,sd=proposalsd)
+
+    # !!!
+    if (target(currentx) == 0) {
+      if (target(proposedx) != 0) {
+        x[i] <- proposedx
+        next
+      }
+      else {
+        x[i] <- currentx
+        next
+      }
+    }
+
+    A <- target(proposedx)/target(currentx)
+    if(runif(1)<A){
+      x[i] <- proposedx
+    } else {
+      x[i] <- currentx
+    }
+  }
+  return(x)
+}
+```
+
+
+## 1. Sampling from an exponential distribution using MCMC
+
+Use the function easyMCMC to explore the following:
+
+### How do different starting values affect the MCMC scheme?
+
+```{r}
+N <- 1000
+
+z1=easyMCMC(N,0,1)
+z2=easyMCMC(N,1,1)
+z3=easyMCMC(N,10,1)
+z4=easyMCMC(N,100,1)
+
+sims <- tbl_df(data.frame(X=seq(1,N), `0`=z1, `1`=z2, `10`=z3, `100`=z4, check.names=F))
+sims <- sims %>% gather(., Start, Value, -X)
+sims %>% ggplot() + aes(x=X, y=Value, color=Start) + geom_line()
+```
+
+Different starting values do not affect the long-term simulation trajectories
+for this particular target function. Simulations with distant, low-probability
+starting points move towards the more dense region of the exponential target
+function and then become indistinguishable from simulations that started there.
+Over enough time, any artifacts introduced would become indiscernible.
+
+```{r}
+sims %>% ggplot() + aes(x=Value, fill=Start) + facet_grid(Start~.) +
+  geom_histogram(binwidth=1)
+
+# Plot again with 100 omitted for clarity
+sims %>% filter(Start != 100) %>% ggplot() + aes(x=Value, fill=Start) +
+  facet_grid(Start~.) + geom_histogram(binwidth=1)
+```
+
+The distributions sampled resemble the target exponential. 
+
+
+### What is the effect of having a bigger/smaller proposal standard deviation?
+
+```{r}
+N <- 1000
+z1=easyMCMC(N,3,.1)
+z2=easyMCMC(N,3,1)
+z3=easyMCMC(N,3,10)
+z4=easyMCMC(N,3,100)
+
+sims <- tbl_df(data.frame(X=seq(1,N), `.1`=z1, `1`=z2, `10`=z3, `100`=z4, check.names=F))
+sims <- sims %>% gather(., StdDev, Value, -X)
+sims %>% ggplot() + aes(x=X, y=Value, color=StdDev) + geom_line()
+# sims %>% filter(StdDev != 100) %>% ggplot() + aes(x=X, y=Value, color=StdDev) + geom_line()
+```
+
+Simulations with much higher standard deviations have a very high incidence of
+steps being rejected for falling outside the range of acceptable parameters.
+This causes the simulations to have a very flat trajectory (see run with
+stddev=100). MCMCs with more moderate standard deviations produce similar
+results.
+
+```{r}
+sims %>% ggplot() + aes(x=Value, fill=StdDev) + facet_grid(StdDev~.) +
+  geom_histogram(binwidth=1)
+
+# # Plot again with 100 omitted for clarity
+# sims %>% filter(StdDev != 100) %>% ggplot() + aes(x=Value, fill=StdDev) +
+#   facet_grid(StdDev~.) + geom_histogram(binwidth=1)
+```
+
+### Try changing the target function to the following
+
+```{r, eval=T}
+target = function(x){
+  return((x>0 & x<1) + (x>2 & x<3))
+}
+```
+
+What does this target look like? What happens if the proposal sd is too small
+here? (try e.g. 1 and 0.1)
+
+```{r}
+x <- seq(0,5,.01)
+qplot(x, target(x))
+```
+
+This is a step function where the value is equal to 1 between $(0,1)$ and
+$(2,3)$.
+
+```{r}
+N <- 1000
+z1=easyMCMC(N,3,.1)
+z2=easyMCMC(N,3,1)
+
+sims <- tbl_df(data.frame(X=seq(1,N), `.1`=z1, `1`=z2, check.names=F))
+sims <- sims %>% gather(., StdDev, Value, -X)
+sims %>% ggplot() + aes(x=X, y=Value, color=StdDev) + geom_line()
+
+sims %>% ggplot() + aes(x=Value, fill=StdDev) + facet_grid(StdDev~.) +
+  geom_histogram()
+```
+
+After modifying the MCMC sampler to handle when `target(currentval) == 0`,
+simulations with small variance are unable to bridge the gap between $(0,1)$
+and $(2,3)$, so the sampled distribution doe not at all resemble the target.
+
+
+## 2. Estimating an allele frequency
+
+Investigate how the starting point and proposal standard deviation affect the
+convergence of the algorithm.
+
+From the prompt:
+
+```{r}
+prior = function(p){
+  if((p<0) || (p>1)) {
+    return(0)
+  } else {
+    return(1)
+  }
+}
+
+likelihood = function(p, nAA, nAa, naa) {
+  return(p^(2*nAA) * (2*p*(1-p))^nAa * (1-p)^(2*naa))
+}
+
+psampler = function(nAA, nAa, naa, niter, pstartval, pproposalsd) {
+  p = rep(0,niter)
+  p[1] = pstartval
+  for(i in 2:niter){
+    currentp = p[i-1]
+    newp = currentp + rnorm(1,0,pproposalsd)
+
+    A = prior(newp)*likelihood(newp,nAA,nAa,naa) /
+      (prior(currentp)*likelihood(currentp,nAA,nAa,naa))
+
+    if(runif(1)<A){
+      p[i] = newp
+    } else {
+      p[i] = currentp
+    }
+  }
+  return(p)
+}
+```
+
+Effects of different standard deviations:
+
+```{r}
+nAA <- 50
+nAa <- 21
+naa <- 29
+N <- 10000
+discard <- 5000 # burn-in time
+
+z1 <- psampler(nAA, nAa, naa, N, 0.5, 0.01)
+z1 <- z1[(discard+1):N]
+
+z2 <- psampler(nAA, nAa, naa, N, 0.5, 0.001)
+z2 <- z2[(discard+1):N]
+
+z3 <- psampler(nAA, nAa, naa, N, 0.5, 0.1)
+# z3 <- psampler(nAA, nAa, naa, N, 0.5, 1)
+z3 <- z3[(discard+1):N]
+
+z4 <- psampler(nAA, nAa, naa, N, 0.5, 0.0001)
+z4 <- z4[(discard+1):N]
+
+z5 <- psampler(nAA, nAa, naa, N, 0.5, 1)
+z5 <- z5[(discard+1):N]
+
+stdsims <- tbl_df(data.frame(X=seq(1,N), `.01`=z1, `.001`=z2, `.1`=z3, `.0001`=z4, `1`=z5, check.names=F))
+stdsims <- stdsims %>% gather(., StdDev, Value, -X)
+stdsims %>% ggplot() + aes(x=X, y=Value, color=StdDev) + geom_line()
+
+stdsims %>% ggplot() + aes(x=Value, fill=StdDev) + facet_grid(StdDev~.) +
+  geom_histogram()
+```
+
+When the standard deviation is too low, the simulation gets stuck while trying
+to climb the quadratic target function. When too high, samples are too spread
+out to faithfully recapitulate the distribution.
+
+Effects of different starting points:
+
+```{r}
+nAA <- 50
+nAa <- 21
+naa <- 29
+N <- 10000
+discard <- 5000 # burn-in time
+
+z1 <- psampler(nAA, nAa, naa, N, 0.1, 0.01)
+z1 <- z1[(discard+1):N]
+
+z2 <- psampler(nAA, nAa, naa, N, 0.5, 0.01)
+z2 <- z2[(discard+1):N]
+
+z3 <- psampler(nAA, nAa, naa, N, 0.9, 0.01)
+z3 <- z3[(discard+1):N]
+
+z4 <- psampler(nAA, nAa, naa, N, 0.01, 0.01)
+z4 <- z4[(discard+1):N]
+
+z5 <- psampler(nAA, nAa, naa, N, 0.99, 0.01)
+z5 <- z5[(discard+1):N]
+
+startsims <- tbl_df(data.frame(X=seq(1,N), `.1`=z1, `.5`=z2, `.9`=z3, `.01`=z4, `.99`=z5, check.names=F))
+startsims <- startsims %>% gather(., Start, Value, -X)
+startsims %>% ggplot() + aes(x=X, y=Value, color=Start) + geom_line()
+
+startsims %>% ggplot() + aes(x=Value, fill=Start) + facet_grid(Start~.) +
+  geom_histogram()
+```
+
+Starting point has little effect on the outcome of the simulations for this
+particular target distribution. It is quadratic and has one maximum, so there
+is no risk for the MCMC to get caught in some local optima.
+
+
+## 3. Estimating an allele frequency and inbreeding coefficient
+
+Write a short MCMC routine to sample from the joint distribution of $f$ and $p$.
+
+Assuming uniform priors on $f$ and $p$:
+
+```{r}
+priorp <- function(p) {
+  if ((p<0)||(p>1)) {
+    return(0)
+  } else {
+    return(1)
+  }
+}
+
+priorf <- function(f) {
+  if ((f<0)||(f>1)) {
+    return(0)
+  } else {
+    return(1)
+  }
+}
+
+fplikelihood <- function(f, p, nAA, nAa, naa) {
+  return( (f*p+(1-f)*p^2)^nAA * ((1-f)*2*p*(1-p))^nAa * (f*(1-p)+(1-f)*(1-p)^2)^naa )
+}
+
+fploglikelihood <- function(f, p, nAA, nAa, naa) {
+  return( nAA*log(f*p+ 1-f)*p^2 + nAa*log((1-f)*2*p*(1-p)) + naa*log(f*(1-p)+(1-f)*(1-p)^2) )
+}
+
+fpsampler <- function(nAA, nAa, naa, niter, fstartval, pstartval, fproposalsd, pproposalsd){
+  f <- rep(0,niter)
+  p <- rep(0,niter)
+  f[1] <- fstartval
+  p[1] <- pstartval
+  for(i in 2:niter){
+    currentf <- f[i-1]
+    currentp <- p[i-1]
+    newf <- currentf + rnorm(1, 0, fproposalsd)
+    newp <- currentp + rnorm(1, 0, pproposalsd)
+
+    # try out the p update
+    A <- priorp(newp)*fplikelihood(currentf, newp, nAA, nAa, naa) /
+      (priorp(currentp)*fplikelihood(currentf, currentp, nAA, nAa, naa))
+    if(runif(1)<A) {
+      p[i] <- newp
+    } else {
+      p[i] <- currentp
+    }
+    
+    # try out the f update
+    A <- priorf(newf)*fplikelihood(newf, p[i], nAA, nAa, naa) /
+      (priorf(currentf)*fplikelihood(currentf, p[i], nAA, nAa, naa))
+    if(runif(1) < A) {
+      f[i] <- newf
+    } else {
+      f[i] <- currentf
+    }
+  }
+  return(list(f=f,p=p)) # return a "list" with two elements named f and p
+}
+
+# R doesn't have a mode function, so I copied this off StackOverflow. Not the
+# safest idea for a point estimate of discretely sampled distributions...
+findMode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+```
+
+Use this sample to obtain point estimates for $f$ and $p$ (e.g. using posterior
+means) and interval estimates for both $f$ and $p$ (e.g. 90% posterior credible
+intervals), when the data are $n\_{AA}=50$,$n_{Aa}=21$, and $n_{aa}=29$.
+
+
+```{r}
+nAA <- 50
+nAa <- 21
+naa <- 29
+N <- 10000
+discard <- 5000 # burn-in time
+
+z <- fpsampler(nAA, nAa, naa, N, 0.5, 0.5, 0.1, 0.1)
+f <- z[[1]]
+p <- z[[2]]
+f <- f[(discard+1):N]
+p <- p[(discard+1):N]
+
+sim <- tbl_df(data.frame(X=seq(1,(N-discard)), "AlleleFreq"=p, "InbreedingCoeff"=f))
+sim <- sim %>% gather(., Param, Value, -X)
+sim %>% ggplot() + aes(x=Value, fill=Param) + facet_grid(Param~.) + geom_histogram()
+
+# point estimates
+mean(f)
+findMode(f)
+mean(p)
+findMode(p)
+
+# credible intervals
+quantile(f, c(.05, .95))
+quantile(p, c(.05, .95))
+```
+
+Point estimates for p and f are 0.605973 and 0.5505812 (sample means),
+respectively. Means capture the peaks of the sampled distributions. However,
+they will not in the case where any of the parameters are at their extreme
+values.
+
+Credible intervals for p and f are $(0.5307393, 0.6671851)$ and $(0.4127076,
+0.6845151)$.
+
+The intervals contain the expected values for p ($.605$).
+
+
+When inbreeding coefficient is 1:
+
+```{r}
+nAA <- 40
+nAa <- 0
+naa <- 40
+N <- 10000
+discard <- 5000 # burn-in time
+
+z <- fpsampler(nAA, nAa, naa, N, 0.5, 0.5, 0.1, 0.1)
+f <- z[[1]]
+p <- z[[2]]
+f <- f[(discard+1):N]
+p <- p[(discard+1):N]
+
+sim <- tbl_df(data.frame(X=seq(1,(N-discard)), "AlleleFreq"=p, "InbreedingCoeff"=f))
+sim <- sim %>% gather(., Param, Value, -X)
+sim %>% ggplot() + aes(x=Value, fill=Param) + facet_grid(Param~.) + geom_histogram()
+
+# point estimates
+mean(f)
+findMode(f)
+mean(p)
+findMode(p)
+
+# credible intervals
+quantile(f, c(.05, .95))
+quantile(p, c(.05, .95))
+```
+
+Because the distribution is cut off at 0, the mode in this case provides a
+better point estimate due to the mean getting skewed.
+
+When there is Hardy-Weinberg equilibrium:
+
+```{r}
+nAA <- 50
+nAa <- 100
+naa <- 50
+N <- 10000
+discard <- 5000 # burn-in time
+
+z <- fpsampler(nAA, nAa, naa, N, 0.5, 0.5, 0.1, 0.1)
+f <- z[[1]]
+p <- z[[2]]
+f <- f[(discard+1):N]
+p <- p[(discard+1):N]
+
+sim <- tbl_df(data.frame(X=seq(1,(N-discard)), "AlleleFreq"=p, "InbreedingCoeff"=f))
+sim <- sim %>% gather(., Param, Value, -X)
+sim %>% ggplot() + aes(x=Value, fill=Param) + facet_grid(Param~.) + geom_histogram()
+
+# point estimates
+mean(f)
+findMode(f)
+mean(p)
+findMode(p)
+
+# credible intervals
+quantile(f, c(.05, .95))
+quantile(p, c(.05, .95))
+```
+
+Because the distribution for f is cut off at 1, the mode in this case provides
+a better point estimate due to the mean getting skewed.
