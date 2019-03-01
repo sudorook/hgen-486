@@ -1,0 +1,613 @@
+---
+title: "Problem Set 4"
+author: "Ansel George"
+output: pdf_document
+---
+
+```{r}
+library(expm)        # for matrix exponents
+library(igraph)      # for Markov chain graphs
+library(MASS)        # for ginv
+library(markovchain) # for generating Markov chains
+
+set.seed(10)
+```
+
+
+# A: Discrete Time Markov Chains
+
+## 4.14
+
+### $P_1$
+
+```{r}
+P1 = matrix(c(0, .5, .5, .5, 0., .5, .5, .5, 0), nrow=3)
+plot(graph_from_adjacency_matrix(P1, weighted=T))
+```
+
+Classes:
+
+ - {1, 2, 3}, recurrent
+
+
+### $P_2$
+
+```{r}
+P2 = matrix(c(0, 0, .5, 0, 0, 0, .5, 0, 0, 0, 0, 1, 1, 1, 0, 0), nrow=4)
+plot(graph_from_adjacency_matrix(P2, weighted=T))
+```
+
+Classes:
+
+ - {1, 2, 3, 4}, recurrent
+
+
+### $P_3$
+
+```{r}
+P3 = matrix(c(.5, .25, .5, 0, 0, 0, .5, 0, 0, 0, .5, .25, .5, 0, 0, 0, 0, 0,
+              .5, .5, 0, 0, 0, .5, .5), nrow=5)
+plot(graph_from_adjacency_matrix(P3, weighted=T))
+```
+
+Classes:
+
+ - {4, 5}, recurrent
+ - {1, 3}, recurrent
+ - {2}, transient
+
+
+### $P_4$
+
+```{r}
+P4 = matrix(c(.25, .5, 0, 0, 1, .75, .5, 0, 0, 0, 0, 0, 1, 1/3, 0, 0, 0, 0,
+              2/3, 0, 0, 0, 0, 0, 0), nrow=5)
+plot(graph_from_adjacency_matrix(P4, weighted=T))
+```
+
+Classes:
+
+ - {4}, transient
+ - {3}, recurrent
+ - {1, 2}, recurrent
+ - {5}, transient
+
+
+## 4.30
+**Three out of every four trucks on the road are followed by a car, while only
+one out of every five cars if followed by a truck. What fraction of vehicles on
+the road are trucks?**
+
+$P(C|T) = .75 \implies P(T|T) = .25$  
+$P(T|C) = .2 \implies P(C|C) = .8$
+
+
+\[ P = \left[ 
+  \begin{array}{cc}
+    .25 & .75  \\
+    .2 & .8  \\
+  \end{array}
+\right] \] 
+
+\begin{align}
+P(C|T)P(T) &= P(T|C)P(C) \\
+\implies P(T) &= \frac{P(T|C)}{P(C|T)}P(C) \\
+  &= \frac{P(T|C)}{P(C|T)} (P(C|T)P(T) + P(C|\overline{T})P(\overline{T}) \\
+  &= \frac{P(T|C)}{P(C|T)} (P(C|T)P(T) + P(C|C)(1-P(T))) \\
+\implies 1 &= \frac{P(T|C)}{P(C|T)} (P(C|T) + \frac{P(C|C)}{P(T)} - P(C|C)) \\
+\implies \frac{P(C|T)}{P(T|C)} &= P(C|T) - P(C|C) + \frac{P(C|C)}{P(T)} \\
+\implies \frac{P(C|C)}{P(T)} &= \frac{P(C|T)}{P(T|C)} - P(C|T) + P(C|C) \\
+\implies P(T) &= P(C|C) \frac{1}{\frac{P(C|T)}{P(T|C)} - P(C|T) + P(C|C)} \\
+   &= .8 \frac{1}{\frac{.75}{.2} - .75 + .8} \\
+   &= \frac{4}{19} \approx 0.2105263
+\end{align}
+
+Alternatively, one could have simply computed the eigendecomposition of P:
+```{r}
+P = matrix(c(.25, .2, .75, .8), nrow=2)
+
+r <- eigen(P)
+rvec <- r$vectors
+lvec <- ginv(r$vectors)
+lam <- r$values
+pi_eig <- lvec[1,] / sum(lvec[1,])
+pi_eig[1] # proportion of trucks
+```
+
+
+## 4.25
+**Each morning an individual leaves his house and goes for a run. He is equally
+likely to leave either from his front or back door. Upon leaving the house, he
+chooses a pair of running shoes (or goes running barefoot if there are not
+shoes at the door from which he departed). On his return he is equally likely
+to enter, and leave his running shoes, either by the front or back door. If he
+owns a total of $k$ pairs of running shoes, what proportion of the time does he
+run barefoot?**
+
+$P(Return Front) = .5$  
+$P(Return Back) = .5$  
+$P(Leave Front) = .5$  
+$P(Leave Back) = .5$  
+
+$P(Return Front | Leave Front) = .25$  
+$P(Return Front | Leave Back) = .25$  
+$P(Return Back | Leave Front) = .25$  
+$P(Return Back | Leave Back) = .25$  
+
+\[ P = \left[ 
+  \begin{array}{cc}
+    .25 & .25  \\
+    .25 & .25  \\
+  \end{array}
+\right] \] 
+
+For a given state $i$, where $i$ is the number of shoes at the front door and $k-i$
+the number at the back, the state can change where:
+
+P(i=i|i=i) = .25 + .25  
+P(i=i+1|i=i) = .25  
+P(i=i-1|i=i) = .25  
+
+In the case that i=k or i=0, the probabilities are instead:
+
+P(i=k|i=k) = .25 + .25 + .25  
+P(i=k-1|i=k) = .25  
+P(i=0|i=0) = .25 + .25 + .25
+P(i=0+1|i=0) = .25
+
+\[ P = \left[ 
+  \begin{array}{ccccccc}
+    .75    & .25    & 0      & \dots  & 0      & 0      & 0 \\
+    .25    & .50    & .25    & \dots  & 0      & 0      & 0 \\
+    0      & .25    & .50    & \dots  & 0      & 0      & 0 \\
+    \vdots & \vdots & \vdots & \ddots & \vdots & \vdots & \vdots \\
+    0      & 0      & 0      & \dots  & .25    & .50    & .25 \\
+    0      & 0      & 0      & \dots  & 0      & .25    & .75 \\
+  \end{array}
+\right] \] 
+
+$P$ is a stochastic matrix, meaning that each row and column sum is 1. This
+means that $\underline{1}$ and $\underline{1}^T$ are left and right
+eigenvectors, respectively, corresponding to eigenvalue 1. It is also
+symmetric.
+
+This means that at stationarity:
+
+\begin{align}
+P^n &= V \Lambda^n V^{-1} \\
+  &= \left[ 
+    \begin{array}{cc}
+      \underline{v}_1 & \hdots \\
+    \end{array}
+  \right]
+  \left[
+    \begin{array}{cccc}
+      1 & 0 & \hdots & 0 \\
+      0 & 0 & \hdots & 0 \\
+      \vdots & \vdots & \ddots & \vdots \\
+      0 & 0 & \hdots & 0 \\
+    \end{array}
+  \right] 
+  \left[
+    \begin{array}{c}
+      \underline{v}_1^T \\
+      \vdots \\ 
+    \end{array}
+  \right] \\
+  &= \left[ 
+    \begin{array}{ccc}
+      \underline{v}_1 & \underline{0} & \hdots \\
+    \end{array}
+  \right]
+  \left[
+    \begin{array}{c}
+      \underline{v}_1^T \\
+      \vdots \\ 
+    \end{array}
+  \right] \\
+  &= \underline{v}_1 \underline{v}_1^T
+\end{align}
+
+Because the eigenvectors that correspond to the eigenspace of 1 for the
+stochastic matrix are all $c\underline{1}$ for some scalar $c$, the outer
+product of $\underline{v_1} \underline{v_1}^T$ creates a uniform matrix with
+equal values in each element. Because the rows and columns must also sum to 1,
+the only possible values for each element that satisfies both constraints is
+$\frac{1}{n}$ for an $n \times n$ matrix.
+
+Returning to the above problem, there are $k+1$ possible states, so the
+stationary probability for each state $i$ is $\frac{1}{k+1}$. For cases when
+the runner goes barefoot, he must either be in state $i=0$ or $i=k$ when
+leaving the house. The probability of going out barefoot in either case is
+$\frac{1}{2}$, as he has an equal chance of picking the door where none or all
+of the shoes are. Therefore, the total probability of running barefoot is
+$2\frac{1}{k+1}\frac{1}{2} = \frac{1}{k+1}$.
+
+Also, consider the following simulation of the Markov chain for $k = 10$ shoes:
+
+```{r}
+makeTransitions <- function(numshoes) {
+  k <- numshoes + 1 # 0 shoes counts as a state, so increment by 1
+  t <- matrix(0, k, k)
+  for (i in 1:k) {
+    for (j in 1:k) {
+      if (i == k && j == k) {
+        t[i,j]  <- .75
+        next
+      }
+      if (i == 1 && j == 1) {
+        t[i,j] <- .75
+        next
+      }
+      if (i == j) {
+        t[i,j] <- .5
+        next
+      }
+      if (j == i - 1) {
+        t[i,j] <- .25
+        next
+      }
+      if (j == i + 1) {
+        t[i,j] <- .25
+        next
+      }
+    }
+  }
+  return(t)
+}
+```
+
+```{r}
+k <- 10
+P = makeTransitions(k)
+
+r <- eigen(P)
+rvec <- r$vectors
+lvec <- ginv(r$vectors)
+lam <- r$values
+pi_eig <- lvec[1,] / sum(lvec[1,])
+pi_eig
+```
+
+
+## 4.73
+**Show that the Markov chain of Exercise 31 is time-reversible.**
+
+**A certain town never has two sunny days in a row. Each day is classified as
+being either sunny, cloudy (but dry), or rainy. If it is sunny one day, then
+it is equally likely to be either cloudy or rainy the next day. If it is rainy
+or cloudy one day then there is one chance in two that it will be the same the
+next day, and if it changes then it is equally likely to be either of the other
+two possibilities. In the long run, what proportion of days are sunny? What
+proportion of days are cloudy?**
+
+The transition matrix is as follows:
+
+\[ P = \left[ 
+  \begin{array}{ccc}
+    0   & .5  & .5  \\
+    .25 & .5  & .25 \\
+    .25 & .25 & .5  \\
+  \end{array}
+\right] \] 
+
+```{r}
+P = matrix(c(0, .25, .25, .5, .5, .25, .5, .25, .5), nrow=3)
+r <- eigen(P)
+rvec <- r$vectors
+lvec <- ginv(r$vectors)
+lam <- r$values
+pi_eig <- lvec[1,] / sum(lvec[1,])
+pi_eig
+```
+
+Sunny: 20%  
+Cloudy: 40%  
+Rainy: 40%  
+
+For the Markov chain to be time-reversible, $P P^T = I$, where $I$ is the
+identity matrix.
+
+From Bayes Rule:
+\begin{align}
+  P(J|I) &= \frac{P(I|J)P(J)}{P(I)} \\
+  P_{ji} &= \frac{\pi_j P_{ij}}{\pi_i}
+\end{align}
+
+where $\pi_i$ and $pi_j$ are the stationary probabilities. If the matrix $P$
+and $P^T$ satisfy this property, then the Markov chain is time-reversible.
+Using the stationary values for $P_{ij}$, $P_{ji}$ is:
+
+\[ P_{ji} = \left[ 
+  \begin{array}{ccc}
+    \frac{.2}{.2}0  & \frac{.4}{.2}.25 & \frac{.4}{.2}.25 \\
+    \frac{.2}{.4}.5 & \frac{.4}{.4}.5  & \frac{.4}{.4}.25 \\
+    \frac{.2}{.4}.5 & \frac{.4}{.4}.25 & \frac{.4}{.4}.5 \\
+  \end{array}
+\right] \\
+  = \left[ 
+  \begin{array}{ccc}
+    0   & .5  & .5 \\
+    .25 & .5  & .25 \\
+    .25 & .25 & .5 \\
+  \end{array}
+\right] = P_{ij} \]
+
+Therefore, P is time-reversible. 
+
+
+## Sequence of nucleotides as a stochastic process
+Consider a single sequence of nucleotides as a stochastic process that can be
+modeled as a time-homogeneous Markov Chain with this probability transition
+matrix (with states ordered a, c, t, g and specified as an R command:
+
+```{r}
+P <- matrix(c(.1, .35, .3, .6, .8, .1, .2, .1, .05, .1, .2, .25, .05, .45, .3,
+              .05), nrow=4)
+```
+
+### a)
+**Assuming you look at a random location in the sequence, kilobases away from
+its starting point, calculate the probability of observing the sequence TATA
+under this model.**
+
+The stationary probabilities of P are:
+
+```{r}
+r <- eigen(P)
+rvec <- r$vectors
+lvec <- ginv(r$vectors)
+lam <- r$values
+pi_eig <- lvec[1,] / sum(lvec[1,])
+pi_eig
+```
+
+Therefore, $\pi_A = 0.3181481$, $\pi_C = 0.3356581$, $\pi_T = 0.1295444$, and
+$\pi_G = 0.2166494$.
+
+
+Given that the random location is several kilobases from the starting point,
+one can make the simplifying assumption that the Markov chain has reached
+stationarity given any starting conditions. The probability of the specific
+sequence TATA is then $\pi_t P(A|T) P(T|A) P(A|T) = 0.1295444 * .3 * .05 * .3
+= 0.0005829498$
+
+```{r}
+dna <- c("A", "C", "T", "G")
+l <- 1000000
+mc <- new("markovchain", states=dna, transitionMatrix=P)
+
+# burn-in the 1st 1000000, keep the 2nd 1000000
+sq <- markovchainSequence(2*l, mc, t0=sample(dna, 1))[l:(2*l)]
+
+sq <- paste(sq, collapse='') # collapse sequence into one long grep-able string 
+length(gregexpr(text=sq, pattern='TATA')[[1]]) / (l-3) # last 3 blocks don't count
+```
+
+The simulated values correspond to the analytical solution. Discrepancies are
+due to high variation relative to the low probability for TATA, which can be
+worked around with larger simulated samples.
+
+
+### b)
+**Use code in R or python to simulate realizations from this chain (it is ok to
+recycle code from the vignettes). Simulate 10,000 bases (as a "burn-in" to
+reach stationarity), and then simulate another 10,000 bases, storing every
+100th base - these are samples from the stationary distribution. Use these
+samle to obtain a Monte Carlo estimate of the probability of observing states
+A, C, T, G under the stationary distribution. Compare your results to an exact
+solution for the stationary distribution.**
+
+```{r}
+dna <- c("A", "C", "T", "G")
+l <- 10000
+mc <- new("markovchain", states=dna, transitionMatrix=P)
+
+# burn-in the 1st 10000, keep the 2nd 10000
+sq <- markovchainSequence(2*l, mc, t0=sample(dna, 1))[l:(2*l)]
+samples <- sq[seq(1, length(sq), 100)]
+
+pA <- mean(samples == "A")
+pT <- mean(samples == "T")
+pC <- mean(samples == "C")
+pG <- mean(samples == "G")
+print(paste("A: ", pA))
+print(paste("C: ", pC))
+print(paste("T: ", pT))
+print(paste("G: ", pG))
+
+# show deviation between true and simulated stationary values
+Re(pi_eig) - c(pA, pC, pT, pG)
+```
+
+The simulated values deviate from the stationary values by a few hundredths.
+
+
+### c)
+**Assuming the first base is equally likely to be A, C, T, or G, calculate the
+expected number of bases before observing the sequence AACC.**
+
+The analytical solution is as follows:
+
+Consider the augmented system that tracks transitions to states 'AA', 'AAC',
+and 'AACC' - with transition probabilities specified in the appended rows and
+columns.
+
+\[ P_{aug} = \left[ 
+  \begin{array}{ccccccc}
+     0   & .8 & .05 & .05 & .1 & 0  & 0 \\
+     .35 & .1 & .1  & .45 & 0  & 0  & 0 \\
+     .30 & .2 & .2  & .3  & 0  & 0  & 0 \\
+     .60 & .1 & .25 & .05 & 0  & 0  & 0 \\
+     0   & 0  & .05 & .05 & .1 & .8 & 0 \\
+     .35 & 0  & .1  & .45 & 0  & 0  & .1 \\
+     0   & 0  & 0   & 0   & 0  & 0  & 1 \\
+  \end{array}
+\right] \] 
+
+The augmented matrix has the following canonical form:
+
+\[ P_{aug} = \left[ 
+  \begin{array}{ccccccc}
+     Q               & R \\
+     \underline{0}^T & I_r \\
+  \end{array}
+\right] \] 
+
+where Q is the set of transient states.
+
+The expected amount of time $\underline{t}$ spent in transient states given the
+set of possible starting conditions is:
+
+\begin{align}
+N &= (I - Q)^{-1} \\
+\underline{t} &= N\underline{1}
+\end{align}
+
+where $N$ is the fundamental matrix and $\underline{t}$ is the vector
+containing the expected time to absorption (sequence 'AACC') given a starting
+position $t_i$.
+
+$N$ represents the sum of the geometric series $Q^0 + Q^1 + Q^2 + \dots$, which
+converges because $Q$ is set to be transient, meaning $Q^n \rightarrow 0$.
+Recall the identity for a convergent geometric sequence: $1 + x + x^2 + x^3 +
+\dots = \frac{1}{1-x}$.
+
+$t$ is the row sums of N and denotes the expected number of steps before
+absorption given starting in $t_i$.
+
+```{r}
+P_aug <- t(matrix(c(0, .8, .05, .05, .1, 0, 0,
+                    .35, .1, .1, .45, 0, 0, 0,
+                    .3, .2, .2, .3, 0, 0, 0,
+                    .6, .1, .25, .05, 0, 0, 0,
+                    0, 0, .05, .05, .1, .8, 0,
+                    .35, 0, .1, .45, 0, 0, .1,
+                    0, 0, 0, 0, 0, 0, 1), nrow=7))
+
+pi_0 <- c(.25, .25, .25, .25) # initial probabilities
+dimensions <- dim(P_aug)[1] - 1 # dimensions of Q
+N <- ginv(diag(dimensions) - P_aug[1:dimensions,1:dimensions]) 
+t <- N %*% matrix(1, dimensions, 1)
+
+t[1:4] %*% pi_0
+```
+
+Given equal initial probabilities for each base, the expected number of base
+pairs before encountering the sequence 'AACC' is $\approx 392.2493$. This
+number is close to the expectation assuming a stationary nucleotide
+distribution ($\approx 392.0756$). An explanation is that the likelihood of
+'AACC' specified by the transition probabilities is so low that one must walk
+so many steps along the Markov chain ($P^n$) that one approaches stationarity.
+
+Should an analytical solution have been impossible to compute, the expectation
+could instead be estimated via simulation:
+
+```{r}
+P <- matrix(c(.1, .35, .3, .6, .8, .1, .2, .1, .05, .1, .2, .25, .05, .45, .3,
+              .05), nrow=4)
+
+# Easier than making a dictionary or whatever R calls it, so 1=A, 2=C, 3=T, and
+# 4=G.
+alphabet <- c(1, 2, 3, 4) 
+
+n <- 1000
+
+mc <- new("markovchain", states=dna, transitionMatrix=P)
+sims <- 0*1:n
+
+for (i in 1:n) {
+  counter <- 1
+  queue <- matrix(NA, 1, 4)
+  queue[4] <- sample(alphabet, 1, prob=c(.25, .25, .25, .25))
+  while (paste(queue, collapse='') != "1122") {
+    # Stick a new value at the end of the queue, cut off the first value, and
+    # overwrite queue. Don't know a way to do it without reallocating for the
+    # entire queue. But that's likely overkill as it's only 4 values...
+    # Premature optimization is the root of all evil, or something like that...
+    queue <- c(queue, sample(alphabet, 1, prob=P[queue[4], ]))[-1]
+    counter <- counter + 1
+    if ( (counter %% 10000) == 0) {
+      print(counter)
+      print(queue)
+    }
+  }
+  sims[i] <- counter
+}
+mean(sims)
+```
+
+The estimated expectation is close to the analytical result ($\approx
+392.2493$), though one should note that the result will deviate more given a
+different random seed.
+
+
+# B: Bayesian Inference
+
+## 1. Example of conjugacy for Poisson distribution
+
+### a)
+**Show analytically that the Gamma distribution is the conjugate prior for the
+Poisson likelihood. That is, if you have data $x_1, \dots, x_n \sim
+Poi(\lambda)$ and your prior distribution on $\lambda$ is a Gamma distribution
+with shape $k$ and scale $\theta$, then your posterior distribution for
+$\lambda$ given $x_1, \dots, x_n$ is also a Gamma distribution.**
+
+The prior and likelihood are as follows:
+
+\begin{align}
+X &\sim Poi(\lambda) = \frac{\lambda^x}{x!}\mathrm{e}^{-\lambda} \\
+X_1, X_2, \dots, X_n &\sim \frac{\lambda^{\sum_i^n x_i}}{\Pi_i^n (x!)}\mathrm{e}^{-n\lambda} \\
+\lambda &\sim Gamma(k, \theta) = \frac{\lambda^{k-1}\mathrm{e}^\frac{-\lambda}{\theta}}{\Gamma{(k)}\theta^k}
+\end{align}
+
+Their product yields:
+
+\begin{align}
+P(\theta|x) &= \frac{\lambda^{\sum_i^n x_i}}{\Pi_i^n (x!)}\mathrm{e}^{-n\lambda} * \frac{\lambda^{k-1}\mathrm{e}^\frac{-\lambda}{\theta}}{\Gamma{(k)}\theta^k} \\
+  &\propto \lambda^{k - 1 + \sum_i^n x_i} \mathrm{e}^{-n\lambda - \frac{\lambda}{\theta}} \\
+  &\propto \lambda^{k - 1 + n\overline{x}} \mathrm{e}^{-\lambda (n + \frac{1}{\theta} )} \\
+  &\propto \lambda^{k - 1 + n\overline{x}} \mathrm{e}^{-\frac{\lambda}{ \frac{\theta}{(n\theta + 1)} }}
+\end{align}
+
+$P(\theta|x)$ therefore follows a Gamma distributions with updated parameters $k
++ n\overline{x}$, and $\frac{\theta}{1+n\theta}$.
+
+
+### b)
+**Using a prior with $k=\theta=1$ and data vector $x=c(0,2,1,4,2,0,0,2)$, compute
+the posterior distribution for $\lambda$. Summarize this posterior distribution
+by a point estimate for $\lambda$. Also, provide a 90% credible interval for
+$\lambda$: that is an interval that, given the data ({and the prior, and the
+Poisson model), has a 90% probability of containing the value of $\lambda$ that
+generated the data.**
+
+From a), the posterior follows a $Gamma(n\overline{x} + 1, \frac{1}{1+n})$
+distribution.
+
+One potential point estimate for the distribution is the expectation, which for
+the Gamma posterior is:
+
+\begin{align}
+E[\lambda] &= k\theta \\
+  &= (n\overline{x} + 1) \frac{1}{1+n} \\
+  &= \frac{8 * 1.375 + 1}{1+8} \\
+  &= \frac{12}{9} \\
+  &= \frac{4}{3}
+\end{align}
+
+Regarding the credible interval for the posterior:
+
+```{r}
+x <- c(0,2,1,4,2,0,0,2)
+n <- length(x)
+xbar <- mean(x)
+
+k <- n*xbar + 1
+theta <- 1/(1+n)
+
+qgamma(.05, shape=k, scale=theta)
+qgamma(.95, shape=k, scale=theta)
+```
+
+The 90% credible interval is $(0.7693569, 2.023057)$.
