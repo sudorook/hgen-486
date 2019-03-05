@@ -127,22 +127,28 @@ abline(0,1,col='red')
 
 ```
 
-Check that when offset, the population still follows the same expectation for
-fold-change.
+The following are some checks to ensure that the simulation is correct by
+testing whether it has the properties of the analytical distribution.
+
+1. Check that when starting at $n_0 > 10$, the population still follows the
+   same expectation for fold-change.
+
 ```{r,eval=F}
 offset_t <- 50
 k2 <- apply(popsizes[,(offset_t+1):ncol(popsizes)], 2, mean)/(n0+offset_t)
 j2 <- apply(popsizes[,(offset_t+1):ncol(popsizes)], 2, mean)
 t_mean2 <- apply(times[,(offset_t+1):ncol(popsizes)], 2, mean)-mean(times[,offset_t+1])
 
-plot(k, t_mean)
+plot(k, t_mean, xlab='fold-change k' ylab='time (hr)')
 points(k2, t_mean2, col='blue')
 
-qqplot(t_mean[1:length(t_mean2)], t_mean2)
+qqplot(t_mean[1:length(t_mean2)], t_mean2, xlab='fold-change k', ylab='fold-change k')
 ```
 
-Check that the estimate for the population growth rate at each step matches
-that for an exponential distribution.
+2. Check that the estimate for the population growth rate $\frac{1}{\bar{X}}$
+   at each step matches that for an exponential distribution, which here is
+   $rj$.
+
 ```{r}
 t_diff <- t_mean[2:length(t_mean)]-t_mean[1:(length(t_mean)-1)]
 plot(j[2:length(j)], t_diff, xlab='j', ylab='delta time (hr)')
@@ -297,15 +303,15 @@ The total number of cells in the bloodstream $x$ is the sum of $m n_i$ where
 $i$ is the $i$th step in the embedded chain:
 
 \begin{align}
-x &= \sum_1_n mi \\
-  &= m \sum_1_n i \\
+x &= \sum_1^n mi \\
+  &= m \sum_1^n i \\
   &= m \frac{n(n+1)}{2} \\
 \end{align}
 
 For x=1000, the number of steps in the chain needed to reach that threshold is:
 
 \begin{align}
-x &= \sum_1_n i \\
+x &= \sum_1^n i \\
 1000 &= .0001 \frac{n(n+1)}{2} \\
 \implies n(n+1) &= 2 * 10^7 \\
 \implies (n+.5)^2 &= 2 * 10^7 + .25 \\
