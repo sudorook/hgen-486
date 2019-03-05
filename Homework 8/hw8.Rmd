@@ -97,10 +97,10 @@ foldExpectationTime <- function(t, r, n0) {
 ```
 
 ```{r}
-n0 <- 10     # initial number of cells
-steps <- 500 # number of steps in the embedded chain
+n0 <- 10      # initial number of cells
+steps <- 500  # number of steps in the embedded chain
 reps <- 10000 # number of replicates
-r <- .01     # cell growth rate
+r <- .01      # cell growth rate
 
 # Run many replicates of the above simulation function
 popsizes <- matrix(0, nrow=reps, ncol=steps)
@@ -133,16 +133,14 @@ testing whether it has the properties of the analytical distribution.
 1. Check that when starting at $n_0 > 10$, the population still follows the
    same expectation for fold-change.
 
-```{r,eval=F}
+```{r}
 offset_t <- 50
 k2 <- apply(popsizes[,(offset_t+1):ncol(popsizes)], 2, mean)/(n0+offset_t)
 j2 <- apply(popsizes[,(offset_t+1):ncol(popsizes)], 2, mean)
 t_mean2 <- apply(times[,(offset_t+1):ncol(popsizes)], 2, mean)-mean(times[,offset_t+1])
 
-plot(k, t_mean, xlab='fold-change k' ylab='time (hr)')
+plot(k, t_mean, xlab='fold-change k', ylab='time (hr)')
 points(k2, t_mean2, col='blue')
-
-qqplot(t_mean[1:length(t_mean2)], t_mean2, xlab='fold-change k', ylab='fold-change k')
 ```
 
 2. Check that the estimate for the population growth rate $\frac{1}{\bar{X}}$
@@ -204,7 +202,7 @@ fr %>% gather(Time,p,-j) %>%
 This distribution has expected value:
 
 \begin{align}
-\frac{i}{p} &= \frac{1}{e^{-rt}} \\
+\frac{i}{p} &= \frac{i}{e^{-rt}} \\
   &= \frac{10}{e^{-rt}} \\
   &= \frac{10}{e^{-.01 * 200}} \\
   &= 73.89056
@@ -220,67 +218,6 @@ And variance:
 \end{align}
 
 
-```{r,eval=F}
-upper <- 50.1
-lower <- 49.9
-mean(popsizes[((times < upper) & (times > lower))])
-var(popsizes[((times < upper) & (times > lower))])
-sd(popsizes[((times < upper) & (times > lower))])
-length(popsizes[((times < upper) & (times > lower))])
-hist(popsizes[((times < upper) & (times > lower))], breaks=10)
-
-upper <- 100.01
-lower <- 99.99
-mean(popsizes[((times < upper) & (times > lower))])
-var(popsizes[((times < upper) & (times > lower))])
-sd(popsizes[((times < upper) & (times > lower))])
-length(popsizes[((times < upper) & (times > lower))])
-hist(popsizes[((times < upper) & (times > lower))], breaks=25)
-
-upper <- 200
-lower <- 199
-mean(popsizes[((times < upper) & (times > lower))])
-var(popsizes[((times < upper) & (times > lower))])
-sd(popsizes[((times < upper) & (times > lower))])
-length(popsizes[((times < upper) & (times > lower))])
-hist(popsizes[((times < upper) & (times > lower))], breaks=100)
-
-upper <- 200.1
-lower <- 199.9
-mean(popsizes[((times < upper) & (times > lower))])
-var(popsizes[((times < upper) & (times > lower))])
-sd(popsizes[((times < upper) & (times > lower))])
-length(popsizes[((times < upper) & (times > lower))])
-hist(popsizes[((times < upper) & (times > lower))], breaks=50)
-
-upper <- 200.01
-lower <- 199.99
-mean(popsizes[((times < upper) & (times > lower))])
-var(popsizes[((times < upper) & (times > lower))])
-sd(popsizes[((times < upper) & (times > lower))])
-length(popsizes[((times < upper) & (times > lower))])
-hist(popsizes[((times < upper) & (times > lower))], breaks=25)
-
-min(popsizes[, steps])
-min(times[, steps])
-```
-
-```{r,eval=F}
-delta <- .1
-jdelta <- seq(n0, steps)
-nbmeans <- seq(n0, steps)
-nbvars <- seq(n0, steps)
-nbsd <- seq(n0, steps)
-nblength <- seq(n0, steps)
-for (i in n0:steps) {
-  nbmeans[i-n0] <- mean(popsizes[((times < i+delta) & (times > i-delta))])
-  nbvars[i-n0] <- var(popsizes[((times < i+delta) & (times > i-delta))])
-  nbsd[i-n0] <- sd(popsizes[((times < i+delta) & (times > i-delta))])
-  nblength[i-n0] <- length(popsizes[((times < i+delta) & (times > i-delta))])
-}
-```
-
-
 4. _**Extra Credit**. Revisit last week’s problem in which a proportion $m =
    0.0001$ of cancer cells enter the blood stream, and we asked at what time is
    there a $99%$ probability that the blood will have received $1000$ cancer
@@ -292,89 +229,74 @@ for (i in n0:steps) {
 
 Under the deterministic model, without cell death in the bloodstream, it took
 $\sim 928.4$ hours for there to be at least 1000 cells in the bloodstream with
-99\% probability.
+99\% probability. With death, that time extended to 997.6803 hours.
 
-Under the stochastic model:
+Under a stochastic model:
 
 With each step in the stochastic model, there are $n$ cells in the population,
-and at each step $mn$ cells enter the bloodstream.
+and at each step $m * n * \delta t$ cells enter the bloodstream, where $m$ is
+the entry rate and $\delta t$ is the instantaneous time differential.
+(Non-infinitesimal values for $\delta t$ as done in the below simulation will
+introduce error.)
 
 The total number of cells in the bloodstream $x$ is the sum of $m n_i$ where
-$i$ is the $i$th step in the embedded chain:
+$n_i$ is the number of cells in the cancer population at the $i$th step in the
+embedded chain.
 
-\begin{align}
-x &= \sum_1^n mi \\
-  &= m \sum_1^n i \\
-  &= m \frac{n(n+1)}{2} \\
-\end{align}
+For $x=1000$, the number of steps in the chain needed to reach that threshold
+is:
 
-For x=1000, the number of steps in the chain needed to reach that threshold is:
+```{r}
+simulateBloodCells <- function(n0, r, m, reps, u=0) {
+  elapsed <- rep(0, reps)
+  bloodcells <- rep(0, reps)
+  population <- rep(n0, reps)
 
-\begin{align}
-x &= \sum_1^n i \\
-1000 &= .0001 \frac{n(n+1)}{2} \\
-\implies n(n+1) &= 2 * 10^7 \\
-\implies (n+.5)^2 &= 2 * 10^7 + .25 \\
-\implies (n+.5) &= \sqrt{2 * 10^7 + .25} \\
-\implies n &= \sqrt{2 * 10^7 + .25} - .5 \\
-  &= 4471.636 \approx 4472
-\end{align}
-
-The chain will need to go 4472 steps to cross the threshold of $x=1000$.
+  for (i in 1:reps) {
+    while(bloodcells[i]<1000) {
+      delta_t <- rexp(1, r*population[i])
+      elapsed[i] <- elapsed[i] + delta_t
+      population[i] <- population[i] + 1
+      bloodcells[i] <- bloodcells[i] + m*population[i]*delta_t - u*(bloodcells[i])*delta_t
+    }
+  }
+  return(list(times=elapsed,popsize=population,bloodsize=bloodcells))
+}
+```
 
 ```{r}
 r <- .01
 m <- .0001
 n0 <- 10
+u <- .01
 
-steps <- ceiling(sqrt(1000/m*2 + .25)-.5)
-reps <- 1000
+reps <- 100 # very time-consuming; should parallelize but can't be bothered...
 
-# Run many replicates of the above simulation function
-popsizes_extra <- matrix(0, nrow=reps, ncol=steps)
-times_extra <- matrix(0, nrow=reps, ncol=steps)
-bloodcells <- matrix(0, nrow=reps, ncol=1)
-
-for (i in 1:reps) {
-  res <- simulateCells(n0, steps, r)
-  popsizes_extra[i,]  <- res$popsize
-  times_extra[i,]  <- res$times
-  bloodcells[i] <- bloodcells[i] + m*sum(res$popsize)
-}
+res_nodeath <- simulateBloodCells(n0, r, m, reps)
+res_death <- simulateBloodCells(n0, r, m, reps, u)
 ```
 
 ```{r}
-hist(times_extra, breaks=50)
-quantile(times_extra, .99)
+hist(res_nodeath$times, xlab='time (hr)')
+mean(res_nodeath$times)
+var(res_nodeath$times)
+quantile(res_nodeath$times, .99)
+
+hist(res_death$times, xlab='time (hr)')
+mean(res_death$times)
+var(res_death$times)
+quantile(res_death$times, .99)
 ```
 
-Using the 99\% quantile for the distribution of times, Once must 667.4 hours to
-cross the threshold of 1000 cells in the bloodstream. This number is
-considerably less than the expected deterministic model.
+Using the 99\% quantile for the distribution of times when $x=1000$ is reached,
+it takes 1013.4 hours to cross the threshold of 1000 cells in the bloodstream.
+The waiting time is 1045.4 hours when cells in the bloodstream are dying. Both
+numbers are larger than the expected times from the deterministic models.
 
-In the case where the cancer cells in the blood are dying,
-
-```{r}
-r <- .01
-m <- .0001
-n0 <- 10
-
-steps <- ceiling(sqrt(1000/m*2 + .25)-.5)*2
-reps <- 100
-
-# Run many replicates of the above simulation function
-popsizes_extra2 <- matrix(0, nrow=reps, ncol=steps)
-times_extra2 <- matrix(0, nrow=reps, ncol=steps)
-bloodcells2 <- matrix(0, nrow=reps, ncol=1)
-
-for (i in 1:reps) {
-  res <- simulateCells(n0, steps, r)
-  popsizes_extra2[i,]  <- res$popsize
-  times_extra2[i,]  <- res$times
-  bloodcells2[i] <- bloodcells2[i] + m*sum(res$popsize)
-}
-```
-
+Note that estimates are skewed toward larger values due to large timesteps
+taken especially near the beginning of the simulation and due to only
+estimating waiting time from values of the blood population that exceed the
+threshold $x=1000$.
 
 
 # 2 Basic molecular phylogenetics
@@ -560,8 +482,13 @@ more likely than the one where humans and gorillas are more recently derived.
 The elevated likelihood is around $\sim 0.77$ log-likelihood units (a $\sim
 2.16$-fold likelihood-ratio).
 
-This locus alone, though, is not sufficient to establish that chimpanzees and
-humans have most recently diverged.
+This locus alone, though, is not sufficient to establish with confidence that
+chimpanzees and humans have most recently diverged. A likelihood-ratio test
+(e.g $\chi^2$) can be used to more formally assess significance.
+
+```{r}
+1-pchisq(loglik-loglik2, 2)
+```
 
 
 5. _Research the **Kimura two-parameter** and the **General Time Reversible**
