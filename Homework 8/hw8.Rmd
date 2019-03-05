@@ -4,6 +4,17 @@ author: Ansel George
 output: pdf_document
 ---
 
+
+```{r, message=F}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ape)
+
+set.seed(10)
+```
+
+
 # 1 Cancer cell population model
 
 *Background: Last week in Problem 1.2, we used a deterministic model of
@@ -14,7 +25,7 @@ exponential growth for a cancer cell population.*
 > a source cancer cell population whose size is growing deterministically. More
 > specifically, assume $x(t)$, the size of the source population at time $t$,
 > is growing exponentially at rate $r$ per hour (i.e. $x(t) = x_0 e^{rt}$ )
-> where x 0 is the starting size of the population. An expected fraction $m$
+> where $x_0$ is the starting size of the population. An expected fraction $m$
 > (for $0 \leq m \leq 1$) of that cancer population is entering the
 > blood/circulatory system, such that cancer cells enter the blood as a Poisson
 > Process with an instantaneous rate of $mx(t)$ per hour._
@@ -27,8 +38,120 @@ all $i$. Suppose the cancer population starts with ten cells and assume $r =
 
 *Answer the following questions:*
 
-1. _Assuming $r = 0.01$, after how many hours should we expect an $e$-fold
-   change in the mean value?_
+1. *Assuming $r = 0.01$, after how many hours should we expect an $e$-fold
+   change in the mean value?*
+
+The probability of transitioning from state $i$ to state $j$ is
+negative-binomially distributed.
+
+\begin{align}
+\mathbb{P}_{ij(t)} &= { j-1 \choose i-1 } (e^{-rt})^i (1-e^{-rt})^{j-i}
+\end{align}
+
+This distribution has expected value:
+
+\begin{align}
+\mathbb{E}[\mathbb{P}_{ij}(t)] &= \frac{i}{p} \\
+  &= \frac{i}{e^{-rt}}
+\end{align}
+
+The expected time needed to elapse before fold-change $k = \frac{j}{i}$ is as
+follows:
+
+\begin{align}
+\mathbb{E}[\mathbb{P}_{ij}(t_0)] &= \frac{i}{e^{-r0}} \\
+  &= i \\
+\mathbb{E}[\mathbb{P}_{ij}(t)] &= \frac{i}{e^{-rt}} \\
+\end{align}
+
+\begin{align}
+\textrm{When }\mathbb{E}[\mathbb{P}_{ij}(t)] &= k\mathbb{E}[\mathbb{P}_{ij}(t_0)], \\
+\frac{i}{e^{-rt}} &= k i \\
+  &= \frac{j}{i} i \\
+  &= j \\
+\implies \frac{1}{e^{-rt}} &= \frac{j}{i} \\
+\implies e^{rt} &= \frac{j}{i} \\
+\implies t &= \frac{1}{r} ln\big(\frac{j}{i}\big)
+\end{align}
+
+*To illustrate the above relationship, consider the following simulation:
+
+```{r}
+# Simulate a Markov chain starting with `n0` cells and growth rate `r` that
+# grows for `steps` steps.
+simulateCells <- function(n0, steps, r) {
+  sizehistory <- rep(0, steps)
+  sizehistory[1] <- n0
+  timehistory <- rep(0, steps)
+  for (i in 2:steps) {
+    timehistory[i] <- timehistory[i-1] + rexp(1, r*sizehistory[i-1])
+    sizehistory[i] <- sizehistory[i-1] + 1
+  }
+  return(list(times=timehistory,popsize=sizehistory))
+}
+
+# Compute the expected time to fold change based on above analytical result.
+foldExpectationTime <- function(t, r, n0) {
+  return(1/r*log(j/n0))
+}
+```
+
+```{r}
+n0 <- 10     # initial number of cells
+steps <- 500 # number of steps in the embedded chain
+reps <- 10000 # number of replicates
+r <- .01     # cell growth rate
+
+# Run many replicates of the above simulation function
+popsizes <- matrix(0, nrow=reps, ncol=steps)
+times <- matrix(0, nrow=reps, ncol=steps)
+
+for (i in 1:reps) {
+  res <- simulateCells(n0, steps, r)
+  popsizes[i,]  <- res$popsize
+  times[i,]  <- res$times
+}
+```
+
+```{r}
+j <- apply(popsizes, 2, mean)    # population sizes from simulation
+k <- apply(popsizes, 2, mean)/n0 # fold change at each step in Markov chain
+t_mean <- apply(times, 2, mean)  # average time to reach population size
+
+# plot(k, t_mean)
+plot(j, t_mean, xlab='j', ylab='time (hr)')
+lines(j, foldExpectationTime(j, r, n0), col='red')
+
+qqplot(t_mean, foldExpectationTime(j, r, n0), xlab='sim. time (hr)', ylab='exp time (hr)')
+abline(0,1,col='red')
+
+```
+
+Check that when offset, the population still follows the same expectation for
+fold-change.
+```{r,eval=F}
+offset_t <- 50
+k2 <- apply(popsizes[,(offset_t+1):ncol(popsizes)], 2, mean)/(n0+offset_t)
+j2 <- apply(popsizes[,(offset_t+1):ncol(popsizes)], 2, mean)
+t_mean2 <- apply(times[,(offset_t+1):ncol(popsizes)], 2, mean)-mean(times[,offset_t+1])
+
+plot(k, t_mean)
+points(k2, t_mean2, col='blue')
+
+qqplot(t_mean[1:length(t_mean2)], t_mean2)
+```
+
+Check that the estimate for the population growth rate at each step matches
+that for an exponential distribution.
+```{r}
+t_diff <- t_mean[2:length(t_mean)]-t_mean[1:(length(t_mean)-1)]
+plot(j[2:length(j)], t_diff, xlab='j', ylab='delta time (hr)')
+lines(j, 1/r/j, col='red')
+
+plot(j[2:length(j)], 1/r/t_diff, xlab='j', ylab='delta time (hr)')
+abline(0,1,col='red')
+```
+
 
 2. _Assuming $r = 0.01$, use known exact solutions for $\mathbb{P}\big(N (t) =
    j\big)$ to plot the value of $\mathbb{P}\big(N (t) = j\big)$ for $1 \leq j
@@ -36,22 +159,221 @@ all $i$. Suppose the cancer population starts with ten cells and assume $r =
    this using a vertically stacked multi-panel plot. (Hint: If you use the
    negative binomial function in R be conscious of the parameterization!)_
 
+```{r}
+probnbinom <- function(i,j,t,r) {
+  if (t==0) {
+    # return 1 when j=i at time 0
+    return((choose(j-1,i-1)*((exp(-r*t))^i)*(1-exp(-r*t))^(j-i))*(j==i)) 
+  } else {
+    return((choose(j-1,i-1)*((exp(-r*t))^i)*(1-exp(-r*t))^(j-i))*(j>i))
+  }
+}
+```
+
+```{r}
+i <- 10
+j <- seq(i,100,.1)
+r <- .01
+
+fr <- tbl_df(data.frame(j=j, T000=probnbinom(n0,j,0,r),
+                        T050=probnbinom(n0,j,50,r),
+                        T100=probnbinom(n0,j,100,r),
+                        T200=probnbinom(n0,j,200,r)))
+fr %>% gather(Time,p,-j) %>%
+  ggplot() + aes(x=j, y=p) + facet_grid(Time~.) + geom_line()
+```
+
+To make later distributions more visible, below is the same plot with y-axis
+scales free.
+
+```{r}
+fr %>% gather(Time,p,-j) %>%
+  ggplot() + aes(x=j, y=p) + facet_grid(Time~.,scale='free') + geom_line()
+```
+
+
 3. _What is the mean and variance of the cancer cell population size after $200$
    hours?_
+
+This distribution has expected value:
+
+\begin{align}
+\frac{i}{p} &= \frac{1}{e^{-rt}} \\
+  &= \frac{10}{e^{-rt}} \\
+  &= \frac{10}{e^{-.01 * 200}} \\
+  &= 73.89056
+\end{align}
+
+And variance:
+
+\begin{align}
+\frac{i(1-p)}{p^2} &= \frac{i(1-e^{-rt})}{e^{-2rt}} \\
+  &= i\big(e^{2rt}-e^{rt}\big)\\
+  &= 10\big(e^{2 * .01 * 200} - e^{.01 * 200}\big)\\
+  &= 472.0909
+\end{align}
+
+
+```{r,eval=F}
+upper <- 50.1
+lower <- 49.9
+mean(popsizes[((times < upper) & (times > lower))])
+var(popsizes[((times < upper) & (times > lower))])
+sd(popsizes[((times < upper) & (times > lower))])
+length(popsizes[((times < upper) & (times > lower))])
+hist(popsizes[((times < upper) & (times > lower))], breaks=10)
+
+upper <- 100.01
+lower <- 99.99
+mean(popsizes[((times < upper) & (times > lower))])
+var(popsizes[((times < upper) & (times > lower))])
+sd(popsizes[((times < upper) & (times > lower))])
+length(popsizes[((times < upper) & (times > lower))])
+hist(popsizes[((times < upper) & (times > lower))], breaks=25)
+
+upper <- 200
+lower <- 199
+mean(popsizes[((times < upper) & (times > lower))])
+var(popsizes[((times < upper) & (times > lower))])
+sd(popsizes[((times < upper) & (times > lower))])
+length(popsizes[((times < upper) & (times > lower))])
+hist(popsizes[((times < upper) & (times > lower))], breaks=100)
+
+upper <- 200.1
+lower <- 199.9
+mean(popsizes[((times < upper) & (times > lower))])
+var(popsizes[((times < upper) & (times > lower))])
+sd(popsizes[((times < upper) & (times > lower))])
+length(popsizes[((times < upper) & (times > lower))])
+hist(popsizes[((times < upper) & (times > lower))], breaks=50)
+
+upper <- 200.01
+lower <- 199.99
+mean(popsizes[((times < upper) & (times > lower))])
+var(popsizes[((times < upper) & (times > lower))])
+sd(popsizes[((times < upper) & (times > lower))])
+length(popsizes[((times < upper) & (times > lower))])
+hist(popsizes[((times < upper) & (times > lower))], breaks=25)
+
+min(popsizes[, steps])
+min(times[, steps])
+```
+
+```{r,eval=F}
+delta <- .1
+jdelta <- seq(n0, steps)
+nbmeans <- seq(n0, steps)
+nbvars <- seq(n0, steps)
+nbsd <- seq(n0, steps)
+nblength <- seq(n0, steps)
+for (i in n0:steps) {
+  nbmeans[i-n0] <- mean(popsizes[((times < i+delta) & (times > i-delta))])
+  nbvars[i-n0] <- var(popsizes[((times < i+delta) & (times > i-delta))])
+  nbsd[i-n0] <- sd(popsizes[((times < i+delta) & (times > i-delta))])
+  nblength[i-n0] <- length(popsizes[((times < i+delta) & (times > i-delta))])
+}
+```
+
 
 4. _**Extra Credit**. Revisit last week’s problem in which a proportion $m =
    0.0001$ of cancer cells enter the blood stream, and we asked at what time is
    there a $99%$ probability that the blood will have received $1000$ cancer
-   cells.  Update your answer using our new stochastic model for the cancer
-   cell source population size. (Continue to assume $r = 0.01$ and the starting
+   cells. Update your answer using our new stochastic model for the cancer cell
+   source population size. (Continue to assume $r = 0.01$ and the starting
    population is size in the cancer is $10$ cells). Provide a value to the
    nearest tenth of an hour and assess if the number is higher or lower than in
    the deterministic model._
 
+Under the deterministic model, without cell death in the bloodstream, it took
+$\sim 928.4$ hours for there to be at least 1000 cells in the bloodstream with
+99\% probability.
+
+Under the stochastic model:
+
+With each step in the stochastic model, there are $n$ cells in the population,
+and at each step $mn$ cells enter the bloodstream.
+
+The total number of cells in the bloodstream $x$ is the sum of $m n_i$ where
+$i$ is the $i$th step in the embedded chain:
+
+\begin{align}
+x &= \sum_1_n mi \\
+  &= m \sum_1_n i \\
+  &= m \frac{n(n+1)}{2} \\
+\end{align}
+
+For x=1000, the number of steps in the chain needed to reach that threshold is:
+
+\begin{align}
+x &= \sum_1_n i \\
+1000 &= .0001 \frac{n(n+1)}{2} \\
+\implies n(n+1) &= 2 * 10^7 \\
+\implies (n+.5)^2 &= 2 * 10^7 + .25 \\
+\implies (n+.5) &= \sqrt{2 * 10^7 + .25} \\
+\implies n &= \sqrt{2 * 10^7 + .25} - .5 \\
+  &= 4471.636 \approx 4472
+\end{align}
+
+The chain will need to go 4472 steps to cross the threshold of $x=1000$.
+
+```{r}
+r <- .01
+m <- .0001
+n0 <- 10
+
+steps <- ceiling(sqrt(1000/m*2 + .25)-.5)
+reps <- 1000
+
+# Run many replicates of the above simulation function
+popsizes_extra <- matrix(0, nrow=reps, ncol=steps)
+times_extra <- matrix(0, nrow=reps, ncol=steps)
+bloodcells <- matrix(0, nrow=reps, ncol=1)
+
+for (i in 1:reps) {
+  res <- simulateCells(n0, steps, r)
+  popsizes_extra[i,]  <- res$popsize
+  times_extra[i,]  <- res$times
+  bloodcells[i] <- bloodcells[i] + m*sum(res$popsize)
+}
+```
+
+```{r}
+hist(times_extra, breaks=50)
+quantile(times_extra, .99)
+```
+
+Using the 99\% quantile for the distribution of times, Once must 667.4 hours to
+cross the threshold of 1000 cells in the bloodstream. This number is
+considerably less than the expected deterministic model.
+
+In the case where the cancer cells in the blood are dying,
+
+```{r}
+r <- .01
+m <- .0001
+n0 <- 10
+
+steps <- ceiling(sqrt(1000/m*2 + .25)-.5)*2
+reps <- 100
+
+# Run many replicates of the above simulation function
+popsizes_extra2 <- matrix(0, nrow=reps, ncol=steps)
+times_extra2 <- matrix(0, nrow=reps, ncol=steps)
+bloodcells2 <- matrix(0, nrow=reps, ncol=1)
+
+for (i in 1:reps) {
+  res <- simulateCells(n0, steps, r)
+  popsizes_extra2[i,]  <- res$popsize
+  times_extra2[i,]  <- res$times
+  bloodcells2[i] <- bloodcells2[i] + m*sum(res$popsize)
+}
+```
+
+
 
 # 2 Basic molecular phylogenetics
 
-*Background: Consider a three taxon tree of human, chimp, and gorilla. Assume
+_Background: Consider a three taxon tree of human, chimp, and gorilla. Assume
 the human-chimp species divergence is $6$ million years ago. Assume the
 human/chimp vs. gorilla divergence is $7$ million years ago. Assume a
 substitution rate of $\mu = 0.2 * 10^{-8}$ per base pair (bp) per year. Further
@@ -59,21 +381,161 @@ assume the **Jukes-Cantor** model of DNA evolution and that the initial bp in
 the common ancestor of all three species is equally likely to have been an $A$,
 $C$, $T$, or $G$. The Jukes-Cantor model assumes that mutations of all types
 are equally likely. (Note: Ignore the subtlety that sequence divergence times
-often predate species divergence times).*
+often predate species divergence times)._
 
 *Answer the following questions:*
 
-1. _Write the rate matrix ($Q$) and the transition function ($P_{ij}(t)$) for
-   the Jukes-Cantor model._
+1. *Write the rate matrix ($Q$) and the transition function ($P_{ij}(t)$) for
+   the Jukes-Cantor model.*
 
-2. _Compute the log-likelihood of a site configuration where: human=$A$,
+\[ Q = \left[
+  \begin{array}{cccc}
+    -\frac{3}{4}\mu & \frac{1}{4}\mu  & \frac{1}{4}\mu  & \frac{1}{4}\mu \\
+    \frac{1}{4}\mu  & -\frac{3}{4}\mu & \frac{1}{4}\mu  & \frac{1}{4}\mu \\
+    \frac{1}{4}\mu  & \frac{1}{4}\mu  & -\frac{3}{4}\mu & \frac{1}{4}\mu \\
+    \frac{1}{4}\mu  & \frac{1}{4}\mu  & \frac{1}{4}\mu  & -\frac{3}{4}\mu \\
+  \end{array}
+\right] \]
+
+\begin{align}
+P_{ij, j \neq i}(t) &= \frac{1}{4} - \frac{1}{4}e^{-\mu t} \\
+P_{ii}(t) &= \frac{1}{4} + \frac{3}{4}e^{-\mu t}
+\end{align}
+
+\[ P(t) = \frac{1}{4} \left[ 
+  \begin{array}{cccc}
+    1 & 1 & 1 & 1 \\
+    1 & 1 & 1 & 1 \\
+    1 & 1 & 1 & 1 \\
+    1 & 1 & 1 & 1 \\
+  \end{array}
+\right] + \frac{1}{4} \left[
+  \begin{array}{cccc}
+    3  & -1 & -1 & -1 \\
+    -1 & 3  & -1 & -1 \\
+    -1 & -1 & 3  & -1 \\
+    -1 & -1 & -1 & 3 \\
+  \end{array}
+\right] e^{-\mu t}
+\]
+
+
+
+2. *Compute the log-likelihood of a site configuration where: human=$A$,
    chimp=$A$, gorilla=$G$ under the given phylogenetic tree. Show your
-   calculations and/or code._
+   calculations and/or code.*
+
+```{r}
+tree <- read.tree(text="((Human=A,Chimp=A),Gorilla=G);")
+plot(tree, type='cladogram')
+nodelabels()
+```
+
+\begin{align}
+P(tree) &= \sum_{z_4} \sum_{z_5} P(Gorilla=G|Z_4) P(Chimp=A|Z_5) P(Human=A|Z_5) P(Z_5|Z_4) P(Z_5) \\
+  &= \sum_{z_4} P(Gorilla=G|Z_4) P(Z_4) \sum_{z_5} P(Chimp=A|Z_5) P(Human=A|Z_5) P(Z_5|Z_4) \\
+  &= \sum_{z_4} P(G|Z_4) P(Z_4) \sum_{z_5} P(A|Z_5) P(A|Z_5) P(Z_5|Z_4) \\
+  &= \sum_{z_4} P(G|Z_4) P(Z_4) m_5(z_4)
+\end{align}
+
+where
+
+\begin{align}
+ m_5(z_4) &= \sum_{z_5} P(A|Z_5) P(A|Z_5) P(Z_5|Z_4) \\
+  &= P(A|Z_4)P(A|A)^2 + P(C|Z_4)P(A|C)^2 + P(G|Z_4)P(A|G)^2 + P(T|Z_4)P(A|T)^2
+\end{align}
+
+Therefore,
+
+\begin{align}
+P(tree) &= \sum_{z_4} P(G|Z_4) P(Z_4) m_5(z_4) \\
+  &= P(G|A) P(A) m_5(A) + P(G|C) P(C) m_5(C) + P(G|G) P(G) m_5(G) + P(G|T) P(T) m_5(T)
+\end{align}
+
+
+In the following code, the dummy variables $\{1,2,3,4\}$ correspond to
+$\{A,C,G,T\}$. Also, the probability for $P(Z_4)$ is assumed to be drawn from
+the stationary distribution for the Jukes-Cantor model, which is $\frac{1}{4}$
+for each base. Because the likelihoods are equal, they do not contribute to
+differences in the log-likelihoods for any given tree marginalized over hidden
+states, so they are ignored in the following computations.
+
+```{r}
+m5_hc <- function(z4, Pt) {
+  return(Pt[z4,] %*% as.matrix(nrow=4, ncol=1, Pt_hg[,1]^2))
+}
+```
+
+```{r}
+mu <- .2 * 10^(-8)
+
+t_hc <- 6*10^6
+t_hg <- 7*10^6
+
+Pt_hc <- 1/4*(matrix(1, nrow=4, ncol=4) +
+              (matrix(-1, nrow=4, ncol=4) + 4*diag(4))*exp(-mu*t_hc))
+Pt_hg <- 1/4*(matrix(1, nrow=4, ncol=4) +
+              (matrix(-1, nrow=4, ncol=4) + 4*diag(4))*exp(-mu*t_hg))
+
+lik <- Pt_hg[,3] %*% m5_hc(c(1,2,3,4), Pt_hc)
+loglik <- log(lik)
+loglik
+```
+
 
 3. _Compute the log-likelihood for the same site configuration under a revised
    phylogeny where humans and gorillas now separate $6$ million years ago and
    chimpanzees separate from the human/gorilla common ancestor $7$ million
    years ago._
+
+```{r}
+tree <- read.tree(text="((Human=A,Gorilla=G),Chimp=A);")
+plot(tree, type='cladogram')
+nodelabels()
+```
+
+\begin{align}
+P(tree) &= \sum_{z_4} \sum_{z_5} P(Gorilla=G|Z_4) P(Chimp=A|Z_5) P(Human=A|Z_5) P(Z_5|Z_4) P(Z_5) \\
+  &= \sum_{z_4} P(Z_4) P(Chimp=A|Z_4) \sum_{z_5} P(Gorilla=G|Z_5) P(Human=A|Z_5) P(Z_5|Z_4) \\
+  &= \sum_{z_4} P(Z_4) P(A|Z_4) \sum_{z_5} P(G|Z_5) P(A|Z_5) P(Z_5|Z_4) \\
+  &= \sum_{z_4} P(G|Z_4) P(Z_4) m_5(z_4)
+\end{align}
+
+where
+
+\begin{align}
+ m_5(z_4) &= \sum_{z_5} P(A|Z_5) P(A|Z_5) P(Z_5|Z_4) \\
+  &= P(A|Z_4)P(A|A)P(G|A) + P(C|Z_4)P(A|C)P(G|C) + P(G|Z_4)P(A|G)P(G|G) + P(T|Z_4)P(A|T)P(G|T)
+\end{align}
+
+Therefore,
+
+\begin{align}
+P(tree) &= \sum_{z_4} P(A|Z_4) P(Z_4) m_5(z_4) \\
+  &= P(A|A) P(A) m_5(A) + P(A|C) P(C) m_5(C) + P(A|G) P(G) m_5(G) + P(A|T) P(T) m_5(T)
+\end{align}
+
+```{r}
+m5_hg <- function(z4, Pt) {
+  return(Pt[z4,] %*% as.matrix(nrow=4, ncol=1, (Pt_hg[,3]*Pt_hg[,1])))
+}
+```
+
+```{r}
+mu <- .2 * 10^(-8)
+
+t_hc <- 7*10^6
+t_hg <- 6*10^6
+
+Pt_hc <- 1/4*(matrix(1, nrow=4, ncol=4) +
+              (matrix(-1, nrow=4, ncol=4) + 4*diag(4))*exp(-mu*t_hc))
+Pt_hg <- 1/4*(matrix(1, nrow=4, ncol=4) +
+              (matrix(-1, nrow=4, ncol=4) + 4*diag(4))*exp(-mu*t_hg))
+
+lik2 <-  Pt_hc[,1] %*% (m5_hg(c(1,2,3,4), Pt_hg))
+loglik2 <- log(lik2)
+loglik2
+```
 
 4. _Compare your results for 2 and 3 - which tree is favored and by how many
    log-likelihood units?  What is your judgment on whether there is enough
@@ -81,7 +543,29 @@ often predate species divergence times).*
    to collect more data or can you already reach a confident decision on the
    phylogeny?)_
 
+
+```{r}
+loglik-loglik2
+exp(loglik-loglik2)
+```
+
+The tree where humans and chimpanzees share the most recent common ancestor is
+more likely than the one where humans and gorillas are more recently derived.
+The elevated likelihood is around $\sim 0.77$ log-likelihood units (a $\sim
+2.16$-fold likelihood-ratio).
+
+This locus alone, though, is not sufficient to establish that chimpanzees and
+humans have most recently diverged.
+
+
 5. _Research the **Kimura two-parameter** and the **General Time Reversible**
    models of sequence evolution. Both of these models are more frequently used
    than the Jukes-Cantor model. Describe in one sentence what is useful about
    each model._
+
+**Kimura two-parameter model:** Allows for different probabilities of
+transitions and transversions, but keeps the uniform stationary distribution.
+
+**General Time Reversible model:** Allows for non-uniform stationary
+distributions of nucleotide frequencies and establishes time-reversibility of
+nucleotide substitutions.
