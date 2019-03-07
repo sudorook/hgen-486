@@ -1,0 +1,134 @@
+---
+title: Problem Set 9
+author: Ansel George
+output: pdf_document
+---
+
+# Brownian Motion, Gaussian processes
+
+
+## A: Brownian Motion
+
+* Let $X(t)$ be conducting standard Brownian motion with $X(0)=0$. Write code
+  to simulate $X(t_1),\hdots,X(t_k)$ for any specified vector
+  $\textbf{t}=(t_1,\hdots,t_k)$ (all positive, and increasing). [Hint: you
+  might want to exploit the fact that the $X$'s form a non-homogeneous Markov
+  chain.] Show a plot ($t$ vs $X(t)$) of an example simulation for
+  $t=(t_1,\hdots.,t_{1000})$ where the $t_k$ are the order statistics of $1000$
+  independent and identically distributed (iid) uniform samples on $[0,1]$.
+
+* Let $X(t)$ be conducting scaled Brownian motion with variance parameter
+  $\sigma^2$ (so $X(t)-X(s) | X(s) \sim N(0,\sigma^2 (t-s))$). Find an
+  expression for the log-likelihood for $\sigma$ given data
+  $X(t_1),\hdots,X(t_k)$ for any specified vector $t=(t_1,\hdots,t_k)$ (all
+  positive, and increasing). Use this to compute and plot the log-likelihood
+  $l(\sigma)$, as a function of $\sigma$, for your example simulated data
+  above. What is the maximum likelihood estimate for $\sigma$? [it suffices to
+  read this from your plot, though an analytic solution is also easily
+  available.]
+
+* Consider the tree in Figure 1 of the Mau et al paper
+  \url{http://www.ncbi.nlm.nih.gov/pubmed/11318142} with leafs labelled 1 to 7.
+  Let $X()$ be the result of performing standard Brownian motion on the tree,
+  starting with $X=0$ at the root of the tree. Let $X^L$ denote the vector of
+  values of $X()$ at the seven labelled leafs, and $X^i$ denote the values of
+  $X()$ at the six labelled internal nodes, including the root node. So $(X^i,
+  X^L)$ has a 13-variate normal distribution. Also $X^i_6=0$ because internal
+  node 6 is the root.
+
+  * Write code to simulate the value of $(X^i,X^L)$ given the coalescent times
+    $(t_1,\dots,t_6)$ [see Figure].
+
+  * Assume from now on that the coalescence times $t_j=1$ for each $j$.
+    Compute the covariance matrix for $(X^i,X^L)$. [Hint: you could write
+    $(X^i,X^L)=AZ$ for some matrix $A$, where $Z$ is a vector whose elements
+    are iid and standard normal; then the covariance is $AA'$.]
+
+  * Check that your answer for the covariance and your simulation code roughly
+    agree. Specifically, simulate 10,000 times from $(X^i,X^L)$ using your code
+    with $t_j=1$, and compare the empirical covariance matrix with your
+    computation.
+
+  * Compute the precision matrix (inverse of the covariance matrix) for
+    $(X^i,X^L)$. [Although you should never compute the inverse of a matrix,
+    you are permitted do so here for pedagogical reasons!] Also find the
+    covariance matrix for $X^i$, the covariance matrix for $X^L$ and their
+    inverses. Relate the sparsity patterns you do or do not see in the
+    precision matrices to what you know about Gaussian Graphical Models.
+
+
+## B: Spatial Gaussian Processes
+
+* Consider the data from
+  \url{http://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.0030339},
+  available at https://github.com/stephens999/hgen48600/tree/master/data/CCR5,
+  which you can read into R using code from
+  https://stephens999.github.io/hgen48600/ccr5.html
+
+* These consist of latitude, longitude, and an allele frequency at each
+  location. We will model these data as a Gaussian process. Since allele
+  frequency lies in [0,1] start by using the transformation
+  $x=\log(\hat{f}/(1-\hat{f}))$. (Here $\hat{f}$ is the estimated frequency in
+  the code above.) We will let $y$ denote locations in space (latitude,
+  longitude) and $x()$ denote the allele frequency varying as a function of
+  space, so $x(y)$ is the allele frequency at location $y$. We will model $x()$
+  as a Gaussian process, with constant mean $\mu=m$ and squared exponential
+  covariance function of the form $a_1 \exp(-(d/a_2)^2)$.
+
+* Hence, $a=(a_1,a_2)$ and the mean $m$ are the parameters to be estimated.
+
+* Write a function to compute the covariance matrix for
+  $x^{\text{obs}}:=(x(y_1),\hdots,x(y_r))$ given a value of $a$. Here
+  $y_1,\dots,y_r$ are the locations at which you have observations in the
+  dataset. Try a few values of $a$ and check that the resulting covariance
+  matrix is valid - that is, it is positive semi-definite. (You can use the
+  `eigen` function to check the eigenvalues are non-negative).
+
+* Write a function to compute the log-likelihood for the data $x^\text{obs}$,
+  given $a,m$. [Here we assume the mean is constant across the whole region, so
+  $m$ is the same at every location].
+
+  * The model here is that $x^{\text{obs}} | m, a \sim N_r(\mu, \Sigma)$ where
+    $\Sigma=\Sigma(a)$ is the function of $a$ that you coded above and
+    $\mu=rep(m,r)$. So your likelihood just involves computing a multivariate
+    normal density. You can use the R function mvtnorm::dmvnorm (with log=TRUE)
+
+* Try using the R function `optim` (or another approach if you prefer) to
+  optimize the likelihood numerically over $a,m$. (I found it seemed to work
+  OK, in that it gave similar answers from different starting points, although
+  it reported convergence=0; I'm not sure why).
+
+* Now we are going to try deleting each of the observed data points in turn and
+  "impute" its value using our model. This process is sometimes known as
+  Kriging.
+
+  * Let $X=(X_1,\dots,X_r)$ be $r$-variate normal with mean $\mu$ and variance
+    covariance $\Sigma$. Write a function to compute the conditional
+    expectation of $X_1$ given $X_2,\dots,X_r$. [This is an application of
+    standard results for the conditional mean of a Gaussian from, e.g.
+    \url{https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Conditional_distributions]}
+
+  * Apply this function to compute $\text{E}(x(y_1) | x(y_2),...,x(y_r))$.
+    Notice that this expectation ends up being a weighted linear combination of
+    the other datapoints. Intuitively, if allele frequencies vary smoothly in
+    space then this weighted linear combination should weight the nearby data
+    points more. Does it?
+
+  * Repeat this for each of the $r$ datapoints.
+
+  * How does the accuracy of this imputation scheme compare with just using the
+    mean of the other datapoints to impute each datapoint?
+
+## C:
+Show that when Francis Galton
+(\url{https://en.wikipedia.org/wiki/Francis_Galton}) was comparing children’s
+heights to the average of their parents’ heights, he was actually kriging. To
+show this, we only need to look at one trio, so you will be working with a 3x3
+matrix.
+
+a) Write down the kernel matrix for the two parents and the offspring based on
+   their genetic similarity, i.e. using the genetic correlation. Let’s assume
+   random mating and approximate the correlation between parents as 0.
+
+b) Predict the height of the child using the kriging (Gaussian process
+   prediction) formula.
