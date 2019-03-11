@@ -6,6 +6,9 @@ output: pdf_document
 
 ```{r,message=F}
 library(ggplot2)
+library(MASS)
+library(mvtnorm)
+
 library(dplyr)
 library(tidyr)
 
@@ -27,28 +30,32 @@ set.seed(10)
   $[0,1]$.
 
 ```{r}
-walkRandomly <- function(steptimes, x0) {
-  # x <- runif(steps)
-  # x <- cumsum(c(x0, x))
+walkRandomly <- function(steptimes, x0, u=0, v=1) {
   x <- rep(0, length(steptimes)+1)
+  stepsizes <- rep(0, length(steptimes))
+
   x[1] <- x0
-  x[2] <- rnorm(1, 0, steptimes[1])
-  for (i in 3:length(steptimes)) {
-    x[i] <- rnorm(1, 0, steptimes[i]-steptimes[i-1]) + x[i-1]
+  stepsizes[1] <- rnorm(1, u, sqrt(steptimes[1]))
+  x[2] <- stepsizes[1] + x[1]
+  for (i in 2:length(steptimes)) {
+    stepsizes[i] <- rnorm(1, u, sqrt(v*(steptimes[i]-steptimes[i-1])))
+    x[i+1] <- stepsizes[i] + x[i]
   }
-  return(x)
+
+  return(list(pos=x,sizes=stepsizes))
 }
 ```
 
 ```{r}
 x0 <- 0
-steps <- 1000
+nsteps <- 1000
 
-steptimes <- sort(runif(steps))
-walk <- walkRandomlyUniform(steptimes, x0)
-qqplot(steptimes, walk)
+steptimes <- sort(runif(nsteps))
+res <- walkRandomly(steptimes, x0)
+walk <- res$pos
+stepsizes <- res$sizes
+qplot(c(0,steptimes), walk, geom='line')
 ```
-
 
 * Let $X(t)$ be conducting scaled Brownian motion with variance parameter
   $\sigma^2$ (so $X(t)-X(s) | X(s) \sim N(0,\sigma^2 (t-s))$). Find an
@@ -60,45 +67,51 @@ qqplot(steptimes, walk)
   read this from your plot, though an analytic solution is also easily
   available.]
 
-  ```{r}
-walkRandomlyNormal <- function(nsteps, x0, m=0, v=1) {
-  steps <- rnorm(steps, m, v)
-  walk <- cumsum(c(x0, steps))
-  # x <- rep(0, steps+1)
-  # x[1] <- x0
-  # for (i in 2:(steps+1)) {
-  #   x[i] <- rnorm(1, m, v) + x[i-1]
-  # }
-  return(list(steps=steps, walk=walk))
-}
+\begin{align}
+L(\sigma^2) &= P(X(t_1), \dots, X(t_n) | \sigma^2) \\
+  &= P(Z_{t_1}, \dots, Z_{t_n} | \sigma^2) \\
+  &= P(Z_{t_1})P(Z_{t_2})\dots P(Z_{t_n}) \\
+\implies \ell(\sigma^2) &= \sum_{i=1}^n \log{P(Z_{t_i})} \\
+  &= \sum_{i=1}^n \log{\frac{1}{\sqrt{2 \pi \sigma^2(t_{i} - t_{i-1})^2}} e^{-\frac{x_i^2}{2\sigma^2(t_{i} - t_{i-1})^2}}}\\
+  &= \sum_{i=1}^n \log{\frac{1}{\sqrt{2 \pi \sigma^2(t_{i} - t_{i-1})^2}}} - \sum_{i=1}^n \frac{x_i^2}{2\sigma^2(t_{i} - t_{i-1})^2} \\
+  &= \sum_{i=1}^n \log{\frac{1}{\sqrt{2 \pi(t_{i} - t_{i-1})^2}}} + \sum_{i=1}^n \log{\frac{1}{\sqrt{\sigma^2}}} - \sum_{i=1}^n \frac{x_i^2}{2\sigma^2(t_{i} - t_{i-1})^2} \\
+  &= \sum_{i=1}^n \log{\frac{1}{\sqrt{2 \pi(t_{i} - t_{i-1})^2}}} + n \log{\frac{1}{\sqrt{\sigma^2}}} - \frac{1}{\sigma^2} \sum_{i=1}^n \frac{x_i^2}{2(t_{i} - t_{i-1})^2} \\
+\implies \frac{\partial \ell}{\partial(\sigma^2)} &= - \frac{n}{2 \sigma^2} + \frac{1}{\sigma^4} \sum_{i=1}^n \frac{x_i^2}{2(t_{i} - t_{i-1})^2} \\
+\end{align}
 
-likRandomlyNormal <- function(steps, m=0, v=1) {
-  p <- pnorm(steps, m, v)
-  logp <- log(p)
+The MLE therefore:
+\begin{align}
+0 &= - \frac{n}{2 \sigma^2} + \frac{1}{\sigma^4} \sum_{i=1}^n \frac{x_i^2}{2(t_{i} - t_{i-1})^2} \\
+0 &= - \frac{n}{\sigma^2} + \frac{1}{\sigma^4} \sum_{i=1}^n \frac{x_i^2}{(t_{i} - t_{i-1})^2} \\
+\implies \frac{n}{\sigma^2} &= \frac{1}{\sigma^4} \sum_{i=1}^n \frac{x_i^2}{(t_{i} - t_{i-1})^2} \\
+\implies n \sigma^2 &= \sum_{i=1}^n \frac{x_i^2}{(t_{i} - t_{i-1})^2} \\
+\implies \hat{\sigma}^2 &= \frac{1}{n} \sum_{i=1}^n \frac{x_i^2}{(t_{i} - t_{i-1})^2} \\
+\end{align}
+
+```{r}
+likRandomly <- function(steptimes, stepsizes, u=0, v=1) {
+  timesteps<-c(steptimes[1], steptimes[2:length(steptimes)] - steptimes[1:(length(steptimes)-1)])
+  logp <- dnorm(stepsizes, u, v*timesteps, log = TRUE)
   return(sum(logp))
 }
 ```
 
 ```{r}
-x0 <- 0
 mu <- 0
-nsteps <- 1000
-
-res <- walkRandomlyNormal(nsteps, x0)
-steps <- res$steps
-walk <- res$walk
-
-qqplot(x=seq(0,nsteps), walk)
-
-v <- seq(.1,10,.01)
+v <- seq(.1,10,.005)
 logliks <- rep(0,length(v))
 
 for (i in 1:length(v)) {
-  res <- walkRandomlyNormal(nsteps, x0, v[i])
-  logliks[i] <- likRandomlyNormal(res$steps, x0, v[i])
+  logliks[i] <- likRandomly(steptimes, stepsizes, mu, v[i])
 }
 
-qqplot(v, logliks)
+# MLE from plot
+qplot(v, logliks, geom='line')
+v[which.max(logliks)]
+
+# MLE from data
+timesteps<-c(steptimes[1], steptimes[2:length(steptimes)] - steptimes[1:(length(steptimes)-1)])
+sum((stepsizes/timesteps)^2)/length(stepsizes)
 ```
 
 * Consider the tree in Figure 1 of the Mau et al paper
@@ -113,15 +126,103 @@ qqplot(v, logliks)
   * Write code to simulate the value of $(X^i,X^L)$ given the coalescent times
     $(t_1,\dots,t_6)$ [see Figure].
 
+```{r}
+computeTreeRandomly <- function(ct, u=0, v=1) {
+  xi <- rep(0, 6)
+  xL <- rep(0, 7)
+
+  xi[6] <- 0
+  xi[5] <- rnorm(1, u, sqrt(v*ct[6]))
+  xi[4] <- xi[5] + rnorm(1, u, sqrt(v*ct[5]))
+  xi[3] <- xi[5] + rnorm(1, u, sqrt(v*(ct[5]+ct[4])))
+  xi[2] <- xi[3] + rnorm(1, u, sqrt(v*ct[3]))
+  xi[1] <- xi[4] + rnorm(1, u, sqrt(v*(ct[3]+ct[2]+ct[4])))
+
+  xL[1] <- xi[4] + rnorm(1, u, sqrt(v*(ct[4]+ct[3]+ct[2]+ct[1])))
+  xL[4] <- xi[1] + rnorm(1, u, sqrt(v*(ct[1])))
+  xL[7] <- xi[1] + rnorm(1, u, sqrt(v*(ct[1])))
+  xL[2] <- xi[3] + rnorm(1, u, sqrt(v*(ct[3]+ct[2]+ct[1])))
+  xL[3] <- xi[2] + rnorm(1, u, sqrt(v*(ct[2]+ct[1])))
+  xL[6] <- xi[2] + rnorm(1, u, sqrt(v*(ct[2]+ct[1])))
+  xL[5] <- rnorm(1, u, sqrt(v*sum(ct)))
+
+  return(list(xi=xi, xL=xL))
+}
+```
+
   * Assume from now on that the coalescence times $t_j=1$ for each $j$.
     Compute the covariance matrix for $(X^i,X^L)$. [Hint: you could write
     $(X^i,X^L)=AZ$ for some matrix $A$, where $Z$ is a vector whose elements
     are iid and standard normal; then the covariance is $AA'$.]
 
+```{r}
+coalescenttimes <- c(1, 1, 1, 1, 1, 1)
+res <- computeTreeRandomly(coalescenttimes)
+xi <- res$xi
+xL <- res$xL
+walk <- c(xi, xL)
+```
+
+Each edge in the graph is independent of other edges, so model the tree as a
+linear combination of edges.
+
+```{r}
+edgelengths <- c(4, 1, 1, 3, 2, 2, 6,
+                 3, 1, 1, 2, 1)
+# edgelengths <- c(3, 1, 1, 2, 1, 4, 1, 1, 3, 2, 2, 6)
+means <- rep(0, length(edgelengths))
+z <- rnorm(means, sqrt(edgelengths))
+
+path_xi1 <- c(0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1)
+path_xi2 <- c(0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1)
+path_xi3 <- c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1)
+path_xi4 <- c(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1)
+path_xi5 <- c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
+path_xi6 <- c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+
+path_xL1 <- c(1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1)
+path_xL2 <- c(0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1)
+path_xL3 <- c(0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1)
+path_xL4 <- c(0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1)
+path_xL5 <- c(0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0)
+path_xL6 <- c(0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1)
+path_xL7 <- c(0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1)
+
+A <- matrix(nrow=13, ncol=12, c(path_xi1,
+           path_xi2,
+           path_xi3,
+           path_xi4,
+           path_xi5,
+           path_xi6,
+           path_xL1,
+           path_xL2,
+           path_xL3,
+           path_xL4,
+           path_xL5,
+           path_xL6,
+           path_xL7), byrow=T)
+
+A <- A %*% diag(edgelengths) # this way the linear combo is of standard normals
+covar <- A %*% t(A)
+covar
+```
+
   * Check that your answer for the covariance and your simulation code roughly
     agree. Specifically, simulate 10,000 times from $(X^i,X^L)$ using your code
     with $t_j=1$, and compare the empirical covariance matrix with your
     computation.
+
+```{r}
+nsims <- 10000
+
+runs <- matrix(0, nrow=nsims, ncol=13)
+
+for (i in 1:nsims) {
+  res <- computeTreeRandomly(coalescenttimes)
+  runs[i,] <- c(res$xi, res$xL)
+}
+cov(runs)
+```
 
   * Compute the precision matrix (inverse of the covariance matrix) for
     $(X^i,X^L)$. [Although you should never compute the inverse of a matrix,
@@ -129,6 +230,35 @@ qqplot(v, logliks)
     covariance matrix for $X^i$, the covariance matrix for $X^L$ and their
     inverses. Relate the sparsity patterns you do or do not see in the
     precision matrices to what you know about Gaussian Graphical Models.
+
+Precision matrix (total)
+
+```{r}
+ginv(covar2)
+```
+
+Everything is conditionally independent of leaf 5.
+
+
+Covariance/Precision matrix for internal nodes:
+
+```{r}
+covar_i <- covar[1:6, 1:6]
+covar_i
+ginv(covar_i)
+```
+
+Covariance/Precision matrix for leaves:
+
+```{r}
+covar_L <- covar[7:13, 7:13]
+covar_L
+ginv(covar_L)
+```
+
+Internal nodes that are more distance from each other on the tree are more
+independent. Nodes that are conditionally independent given the position of the
+root also have near-0 entries in the precision matrices.
 
 
 ## B: Spatial Gaussian Processes
@@ -138,6 +268,19 @@ qqplot(v, logliks)
   available at https://github.com/stephens999/hgen48600/tree/master/data/CCR5,
   which you can read into R using code from
   https://stephens999.github.io/hgen48600/ccr5.html
+
+```{bash}
+wget -nc https://raw.githubusercontent.com/stephens999/hgen48600/master/data/CCR5/CCR5.freq.txt
+```
+
+```{r}
+ccr5 <- read.table("CCR5.freq.txt",header=TRUE)
+ccr5[,1] <- ifelse(ccr5[,1]>180,ccr5[,1]-360,ccr5[,1]) # changes longitudes>180 to negative
+
+ccr5$count = round(ccr5$Freq* ccr5$SampleSize * 2)
+ccr5$fhat = (ccr5$count+1)/(ccr5$SampleSize*2+2)
+ccr5$Xhat = log(ccr5$fhat/(1-ccr5$fhat))
+```
 
 * These consist of latitude, longitude, and an allele frequency at each
   location. We will model these data as a Gaussian process. Since allele
@@ -149,6 +292,10 @@ qqplot(v, logliks)
   as a Gaussian process, with constant mean $\mu=m$ and squared exponential
   covariance function of the form $a_1 \exp(-(d/a_2)^2)$.
 
+```{r}
+ccr5$X <- log(ccr5$Freq/(1-ccr5$Freq))
+```
+
 * Hence, $a=(a_1,a_2)$ and the mean $m$ are the parameters to be estimated.
 
 * Write a function to compute the covariance matrix for
@@ -158,6 +305,41 @@ qqplot(v, logliks)
   matrix is valid - that is, it is positive semi-definite. (You can use the
   `eigen` function to check the eigenvalues are non-negative).
 
+```{r}
+computeCovarianceMatrix <- function(f, a1, a2) {
+  d2 <- matrix(0, dim(f)[1], dim(f)[1])
+  for (i in 1:dim(d2)[1]) {
+    d2[i,] <- (f$Long[i] - f$Long)^2 + (f$Lat[i] - f$Lat)^2
+  }
+  return(a1*exp( -d2/(a2)^2 ))
+  # return(d2)
+}
+```
+
+```{r}
+a1 <- 1
+a2 <- 1
+covar <- computeCovarianceMatrix(ccr5, a1, a2)
+res <- eigen(covar)
+sum(res$values < 0) # number of negative eigenvalues
+```
+
+```{r}
+a1 <- 10
+a2 <- 10
+covar <- computeCovarianceMatrix(ccr5, a1, a2)
+res <- eigen(covar)
+sum(res$values < 0) # number of negative eigenvalues
+```
+
+```{r}
+a1 <- .5
+a2 <- .5
+covar <- computeCovarianceMatrix(ccr5, a1, a2)
+res <- eigen(covar)
+sum(res$values < 0) # number of negative eigenvalues
+```
+
 * Write a function to compute the log-likelihood for the data $x^\text{obs}$,
   given $a,m$. [Here we assume the mean is constant across the whole region, so
   $m$ is the same at every location].
@@ -166,6 +348,15 @@ qqplot(v, logliks)
     $\Sigma=\Sigma(a)$ is the function of $a$ that you coded above and
     $\mu=rep(m,r)$. So your likelihood just involves computing a multivariate
     normal density. You can use the R function mvtnorm::dmvnorm (with log=TRUE)
+
+
+```{r}
+computeSquaredExponentialLogLikelihood <- function(f, m, covar) {
+  mu <- rep(m, dim(f)[1])
+
+}
+```
+
 
 * Try using the R function `optim` (or another approach if you prefer) to
   optimize the likelihood numerically over $a,m$. (I found it seemed to work
