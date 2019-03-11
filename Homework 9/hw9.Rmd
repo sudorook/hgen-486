@@ -91,7 +91,7 @@ The MLE therefore:
 ```{r}
 likRandomly <- function(steptimes, stepsizes, u=0, v=1) {
   timesteps<-c(steptimes[1], steptimes[2:length(steptimes)] - steptimes[1:(length(steptimes)-1)])
-  logp <- dnorm(stepsizes, u, v*timesteps, log = TRUE)
+  logp <- dnorm(stepsizes, u, sqrt(v*timesteps), log = TRUE)
   return(sum(logp))
 }
 ```
@@ -110,8 +110,9 @@ qplot(v, logliks, geom='line')
 v[which.max(logliks)]
 
 # MLE from data
-timesteps<-c(steptimes[1], steptimes[2:length(steptimes)] - steptimes[1:(length(steptimes)-1)])
-sum((stepsizes/timesteps)^2)/length(stepsizes)
+timesteps<-c(steptimes[1], steptimes[2:length(steptimes)] -
+             steptimes[1:(length(steptimes)-1)])
+sum(stepsizes^2/timesteps)/length(stepsizes)
 ```
 
 * Consider the tree in Figure 1 of the Mau et al paper
@@ -169,9 +170,6 @@ linear combination of edges.
 ```{r}
 edgelengths <- c(4, 1, 1, 3, 2, 2, 6,
                  3, 1, 1, 2, 1)
-# edgelengths <- c(3, 1, 1, 2, 1, 4, 1, 1, 3, 2, 2, 6)
-means <- rep(0, length(edgelengths))
-z <- rnorm(means, sqrt(edgelengths))
 
 path_xi1 <- c(0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1)
 path_xi2 <- c(0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1)
@@ -188,19 +186,10 @@ path_xL5 <- c(0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0)
 path_xL6 <- c(0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1)
 path_xL7 <- c(0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1)
 
-A <- matrix(nrow=13, ncol=12, c(path_xi1,
-           path_xi2,
-           path_xi3,
-           path_xi4,
-           path_xi5,
-           path_xi6,
-           path_xL1,
-           path_xL2,
-           path_xL3,
-           path_xL4,
-           path_xL5,
-           path_xL6,
-           path_xL7), byrow=T)
+A <- matrix(nrow=13, ncol=12, byrow=T,
+            c(path_xi1, path_xi2, path_xi3, path_xi4, path_xi5, path_xi6,
+              path_xL1, path_xL2, path_xL3, path_xL4, path_xL5, path_xL6,
+              path_xL7))
 
 A <- A %*% diag(edgelengths) # this way the linear combo is of standard normals
 covar <- A %*% t(A)
