@@ -234,7 +234,7 @@ cov(runs)
 Precision matrix (total)
 
 ```{r}
-ginv(covar2)
+ginv(covar)
 ```
 
 Everything is conditionally independent of leaf 5.
@@ -269,7 +269,7 @@ root also have near-0 entries in the precision matrices.
   which you can read into R using code from
   https://stephens999.github.io/hgen48600/ccr5.html
 
-```{bash}
+```{bash, message=F}
 wget -nc https://raw.githubusercontent.com/stephens999/hgen48600/master/data/CCR5/CCR5.freq.txt
 ```
 
