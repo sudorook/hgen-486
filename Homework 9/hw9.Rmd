@@ -8,9 +8,7 @@ output: pdf_document
 library(ggplot2)
 library(MASS)
 library(mvtnorm)
-
-library(dplyr)
-library(tidyr)
+library(geosphere)
 
 set.seed(10)
 ```
@@ -150,6 +148,27 @@ computeTreeRandomly <- function(ct, u=0, v=1) {
 
   return(list(xi=xi, xL=xL))
 }
+# computeTreeRandomly <- function(ct, u=0, v=1) {
+#   xi <- rep(0, 6)
+#   xL <- rep(0, 7)
+#
+#   xi[6] <- 0
+#   xi[5] <- rnorm(1, u, v*ct[6])
+#   xi[4] <- xi[5] + rnorm(1, u, v*ct[5])
+#   xi[3] <- xi[5] + rnorm(1, u, v*(ct[5]+ct[4]))
+#   xi[2] <- xi[3] + rnorm(1, u, v*ct[3])
+#   xi[1] <- xi[4] + rnorm(1, u, v*(ct[3]+ct[2]+ct[4]))
+#
+#   xL[1] <- xi[4] + rnorm(1, u, v*(ct[4]+ct[3]+ct[2]+ct[1]))
+#   xL[4] <- xi[1] + rnorm(1, u, v*(ct[1]))
+#   xL[7] <- xi[1] + rnorm(1, u, v*(ct[1]))
+#   xL[2] <- xi[3] + rnorm(1, u, v*(ct[3]+ct[2]+ct[1]))
+#   xL[3] <- xi[2] + rnorm(1, u, v*(ct[2]+ct[1]))
+#   xL[6] <- xi[2] + rnorm(1, u, v*(ct[2]+ct[1]))
+#   xL[5] <- rnorm(1, u, v*sum(ct))
+#
+#   return(list(xi=xi, xL=xL))
+# }
 ```
 
   * Assume from now on that the coalescence times $t_j=1$ for each $j$.
@@ -192,8 +211,9 @@ A <- matrix(nrow=13, ncol=12, byrow=T,
               path_xL1, path_xL2, path_xL3, path_xL4, path_xL5, path_xL6,
               path_xL7))
 
-A <- A %*% diag(edgelengths) # this way the linear combo is of standard normals
-covar <- A %*% t(A)
+# A <- A %*% diag(sqrt(edgelengths)) # this way the linear combo is of standard normals
+# A <- A %*% diag(edgelengths) # this way the linear combo is of standard normals
+covar <- A %*% diag(edgelengths) %*% t(A)
 covar
 ```
 
@@ -266,10 +286,6 @@ wget -nc https://raw.githubusercontent.com/stephens999/hgen48600/master/data/CCR
 ```{r}
 ccr5 <- read.table("CCR5.freq.txt",header=TRUE)
 ccr5[,1] <- ifelse(ccr5[,1]>180,ccr5[,1]-360,ccr5[,1]) # changes longitudes>180 to negative
-
-ccr5$count = round(ccr5$Freq* ccr5$SampleSize * 2)
-ccr5$fhat = (ccr5$count+1)/(ccr5$SampleSize*2+2)
-ccr5$Xhat = log(ccr5$fhat/(1-ccr5$fhat))
 ```
 
 * These consist of latitude, longitude, and an allele frequency at each
@@ -283,7 +299,9 @@ ccr5$Xhat = log(ccr5$fhat/(1-ccr5$fhat))
   covariance function of the form $a_1 \exp(-(d/a_2)^2)$.
 
 ```{r}
-ccr5$X <- log(ccr5$Freq/(1-ccr5$Freq))
+ccr5$count = round(ccr5$Freq* ccr5$SampleSize * 2)
+ccr5$fhat = (ccr5$count+1)/(ccr5$SampleSize*2+2)
+ccr5$X = log(ccr5$fhat/(1-ccr5$fhat))
 ```
 
 * Hence, $a=(a_1,a_2)$ and the mean $m$ are the parameters to be estimated.
@@ -297,12 +315,9 @@ ccr5$X <- log(ccr5$Freq/(1-ccr5$Freq))
 
 ```{r}
 computeCovarianceMatrix <- function(f, a1, a2) {
-  d2 <- matrix(0, dim(f)[1], dim(f)[1])
-  for (i in 1:dim(d2)[1]) {
-    d2[i,] <- (f$Long[i] - f$Long)^2 + (f$Lat[i] - f$Lat)^2
-  }
-  return(a1*exp( -d2/(a2)^2 ))
-  # return(d2)
+  # d2 <- geosphere::distm(f[,1:2])
+  d2 <- geosphere::distm(f[,1:2])/1000 # keep in km
+  return(a1*exp( -(d2/a2)^2 ))
 }
 ```
 
@@ -315,16 +330,16 @@ sum(res$values < 0) # number of negative eigenvalues
 ```
 
 ```{r}
-a1 <- 10
-a2 <- 10
+a1 <- 1
+a2 <- 100
 covar <- computeCovarianceMatrix(ccr5, a1, a2)
 res <- eigen(covar)
 sum(res$values < 0) # number of negative eigenvalues
 ```
 
 ```{r}
-a1 <- .5
-a2 <- .5
+a1 <- 10
+a2 <- .1
 covar <- computeCovarianceMatrix(ccr5, a1, a2)
 res <- eigen(covar)
 sum(res$values < 0) # number of negative eigenvalues
@@ -341,10 +356,20 @@ sum(res$values < 0) # number of negative eigenvalues
 
 
 ```{r}
-computeSquaredExponentialLogLikelihood <- function(f, m, covar) {
+computeSELogLikelihood <- function(f, m, a1, a2) {
   mu <- rep(m, dim(f)[1])
-
+  covar <- computeCovarianceMatrix(f, a1, a2)
+  return(mvtnorm::dmvnorm(f$X, mean=mu, sigma=covar, log=T))
 }
+```
+
+```{r}
+# computeSELogLikelihood(c(0, 1, 1), ccr5)
+# computeSELogLikelihood(c(0, 1, .1), ccr5)
+# computeSELogLikelihood(c(0, 1, 10), ccr5)
+computeSELogLikelihood(ccr5, 1, 1, 1)
+computeSELogLikelihood(ccr5, 10, 1, .1)
+computeSELogLikelihood(ccr5, 1, .5, 100)
 ```
 
 
@@ -352,6 +377,30 @@ computeSquaredExponentialLogLikelihood <- function(f, m, covar) {
   optimize the likelihood numerically over $a,m$. (I found it seemed to work
   OK, in that it gave similar answers from different starting points, although
   it reported convergence=0; I'm not sure why).
+
+```{r}
+computeSELogLikelihoodOptim <- function(par, f) {
+  m <- par[1]
+  a1 <- par[2]
+  a2 <- par[3]
+  mu <- rep(m, dim(f)[1])
+  covar <- computeCovarianceMatrix(f, a1, a2)
+  return(-mvtnorm::dmvnorm(f$X, mean=mu, sigma=covar, log=T)) # reverse sign so that optim will find maximum
+}
+```
+
+```{r}
+r1 <- optim(par=c(0,1,100), fn=computeSELogLikelihoodOptim, f=ccr5)
+# r2 <- optim(par=c(1,1,1), fn=computeSELogLikelihoodOptim, f=ccr5)
+# r3 <- optim(par=c(10,10,10), fn=computeSELogLikelihoodOptim, f=ccr5)
+# r4 <- optim(par=c(10,10,10), fn=computeSELogLikelihoodOptim, f=ccr5)
+r1
+
+mu <- rep(r1$par[1], dim(ccr5)[1])
+covar <- computeCovarianceMatrix(ccr5, r1$par[2], r1$par[3])
+res <- eigen(covar)
+sum(res$values < 0) # number of negative eigenvalues
+```
 
 * Now we are going to try deleting each of the observed data points in turn and
   "impute" its value using our model. This process is sometimes known as
@@ -363,27 +412,120 @@ computeSquaredExponentialLogLikelihood <- function(f, m, covar) {
     standard results for the conditional mean of a Gaussian from, e.g.
     \url{https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Conditional_distributions]}
 
+```{r}
+imputeData <- function(idx, f, mu, covar) {
+  mu1 <- mu[idx]
+  mu2 <- mu[-idx]
+
+  covar11 <- covar[idx,idx]
+  covar12 <- matrix(nrow=1, covar[idx,][-idx])
+  covar22 <- covar[-idx,-idx]
+
+  x <- mu1 + covar12 %*% ginv(covar22) %*% (f$X[-idx]-mu2)
+  # v <- covar11 - covar12 %*% ginv(covar22) %*% t(covar12)
+  return(x)
+}
+```
+
   * Apply this function to compute $\text{E}(x(y_1) | x(y_2),...,x(y_r))$.
     Notice that this expectation ends up being a weighted linear combination of
     the other datapoints. Intuitively, if allele frequencies vary smoothly in
     space then this weighted linear combination should weight the nearby data
     points more. Does it?
 
+```{r}
+ccr5$X[1]
+imputeData(1, ccr5, mu, covar)
+```
+
+```{r}
+covar11 <- covar[1,1]
+covar12 <- matrix(nrow=1, covar[1,][-1])
+covar22 <- covar[-1,-1]
+
+w <- covar12 %*% ginv(covar22)
+d <- geosphere::distm(ccr5[,1:2])[1,]/1000 # keep in km
+qplot(d[-1], abs(as.vector(w)))
+```
+
+```{r}
+covar11 <- covar[50,50]
+covar12 <- matrix(nrow=1, covar[50,][-50])
+covar22 <- covar[-50,-50]
+
+w <- covar12 %*% ginv(covar22)
+d <- geosphere::distm(ccr5[,1:2])[50,]/1000 # keep in km
+qplot(d[-50], abs(as.vector(w)))
+```
+
+
   * Repeat this for each of the $r$ datapoints.
+
+```{r}
+Xbar <- rep(0, dim(ccr5)[1])
+for (i in 1:dim(ccr5)[1]) {
+  Xbar[i] <- imputeData(i, ccr5, mu, covar)
+}
+qqplot(ccr5$X, Xbar)
+abline(0,1)
+```
 
   * How does the accuracy of this imputation scheme compare with just using the
     mean of the other datapoints to impute each datapoint?
 
+```{r}
+Xmean <- rep(0, dim(ccr5)[1])
+for (i in 1:dim(ccr5)[1]) {
+  Xmean[i] <- mean(ccr5$X[-i])
+}
+qqplot(ccr5$X, Xmean)
+abline(0,1)
+```
+
+
 ## C:
-Show that when Francis Galton
-(\url{https://en.wikipedia.org/wiki/Francis_Galton}) was comparing children’s
+*Show that when Francis Galton
+(\url{https://en.wikipedia.org/wiki/Francis_Galton}) was comparing children's
 heights to the average of their parents’ heights, he was actually kriging. To
 show this, we only need to look at one trio, so you will be working with a 3x3
-matrix.
+matrix.*
 
-a) Write down the kernel matrix for the two parents and the offspring based on
-   their genetic similarity, i.e. using the genetic correlation. Let’s assume
-   random mating and approximate the correlation between parents as 0.
+a) *Write down the kernel matrix for the two parents and the offspring based on
+   their genetic similarity, i.e. using the genetic correlation. Let's assume
+   random mating and approximate the correlation between parents as 0.*
 
-b) Predict the height of the child using the kriging (Gaussian process
-   prediction) formula.
+The relatedness matrix (Child, Father, Mother) is:
+
+\[ \Sigma = \left[
+  \begin{array}{ccc}
+    1  & .5 & .5  \\
+    .5 & 1  & 0 \\
+    .5 & 0  & 1 \\
+  \end{array}
+\right] \]
+
+
+b) *Predict the height of the child using the kriging (Gaussian process
+   prediction) formula.*
+
+\begin{align}
+\bar{\mu} &= \underline{\mu}_1  + \Sigma_{12} \Sigma_{22}^{-1} (\underline{x} - \underline{\mu}_2) \\
+  &= \mu_C + \left[ \begin{array}{cc} .5 & .5 \end{array} \right]  \left[ \begin{array}{cc} 1 & 0 \\ 0 & 1 \end{array} \right]^{-1} \left[ \begin{array}{c} x_F - \mu_F \\ x_M - \mu_F \end{array} \right] \\
+  &= \mu_C + \left[ \begin{array}{cc} .5 & .5 \end{array} \right] \left[ \begin{array}{c} x_F - \mu_F \\ x_M - \mu_F \end{array} \right] \\
+  &= \mu_C + .5 ( x_F + x_M) - .5 ( \mu_F + \mu_M)
+\end{align}
+
+The $\mu$ terms correspond to the means for child, mother, and father heights,
+and the $x$ terms are the height measurements from the mother and father.  If
+the mean height for males and females are assumed to be the same, this
+expression simplifies further.
+
+\begin{align}
+\bar{\mu} &= \mu_C + .5 ( x_F + x_M) - .5 ( \mu_F + \mu_M) \\
+  &= \mu + .5 ( x_F + x_M) - .5 (\mu + \mu) \\
+  &= \mu + .5 ( x_F + x_M) - \mu \\
+  &= .5 ( x_F + x_M)
+\end{align}
+
+Therefore, the conditional expectation for child height computed by kriging is
+simply the average of the mother's and father's heights.
