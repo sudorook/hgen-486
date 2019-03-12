@@ -18,16 +18,22 @@ set.seed(10)
 
 ## A: Brownian Motion
 
-* Let $X(t)$ be conducting standard Brownian motion with $X(0)=0$. Write code
+* *Let $X(t)$ be conducting standard Brownian motion with $X(0)=0$. Write code
   to simulate $X(t_1),\hdots,X(t_k)$ for any specified vector
   $\textbf{t}=(t_1,\hdots,t_k)$ (all positive, and increasing). [Hint: you
   might want to exploit the fact that the $X$'s form a non-homogeneous Markov
   chain.] Show a plot ($t$ vs $X(t)$) of an example simulation for
   $\textbf{t}=(t_1,\hdots.,t_{1000})$ where the $t_k$ are the order statistics
   of $1000$ independent and identically distributed (iid) uniform samples on
-  $[0,1]$.
+  $[0,1]$.*
 
 ```{r}
+# Simulate random walk
+#  steptimes: vectors of increasing values that specify time points of random walk.
+#  x0: starting position
+#  u: mean of random walk
+#  v: variance of random walk
+# Returns list of walk positions and size of steps taken
 walkRandomly <- function(steptimes, x0, u=0, v=1) {
   x <- rep(0, length(steptimes)+1)
   stepsizes <- rep(0, length(steptimes))
@@ -48,14 +54,14 @@ walkRandomly <- function(steptimes, x0, u=0, v=1) {
 x0 <- 0
 nsteps <- 1000
 
-steptimes <- sort(runif(nsteps))
+steptimes <- sort(runif(nsteps)) # order statistics of 1000 uniformly distributed variables
 res <- walkRandomly(steptimes, x0)
 walk <- res$pos
 stepsizes <- res$sizes
 qplot(c(0,steptimes), walk, geom='line')
 ```
 
-* Let $X(t)$ be conducting scaled Brownian motion with variance parameter
+* *Let $X(t)$ be conducting scaled Brownian motion with variance parameter
   $\sigma^2$ (so $X(t)-X(s) | X(s) \sim N(0,\sigma^2 (t-s))$). Find an
   expression for the log-likelihood for $\sigma$ given data
   $X(t_1),\hdots,X(t_k)$ for any specified vector $t=(t_1,\hdots,t_k)$ (all
@@ -63,18 +69,21 @@ qplot(c(0,steptimes), walk, geom='line')
   $l(\sigma)$, as a function of $\sigma$, for your example simulated data
   above. What is the maximum likelihood estimate for $\sigma$? [it suffices to
   read this from your plot, though an analytic solution is also easily
-  available.]
+  available.]*
 
 \begin{align}
 L(\sigma^2) &= P(X(t_1), \dots, X(t_n) | \sigma^2) \\
+  &= P(X(t_1), (X(t_2-t_1)+X(t_1)), \dots, (X(t_n-t_{n-1})+X(t_{n-1})) | \sigma^2) \\
+  &= P(X(t_1), X(t_2-t_1), \dots, X(t_n-t_{n-1}) | \sigma^2) \\
   &= P(Z_{t_1}, \dots, Z_{t_n} | \sigma^2) \\
   &= P(Z_{t_1})P(Z_{t_2})\dots P(Z_{t_n}) \\
+  &= \prod_{i=1}^n P(Z_i) \\
 \implies \ell(\sigma^2) &= \sum_{i=1}^n \log{P(Z_{t_i})} \\
-  &= \sum_{i=1}^n \log{\frac{1}{\sqrt{2 \pi \sigma^2(t_{i} - t_{i-1})}} e^{-\frac{x_i^2}{2\sigma^2(t_{i} - t_{i-1})}}}\\
+  &= \sum_{i=1}^n \log{\Big(\frac{1}{\sqrt{2 \pi \sigma^2(t_{i} - t_{i-1})}} e^{-\frac{x_i^2}{2\sigma^2(t_{i} - t_{i-1})}}\Big)}\\
   &= \sum_{i=1}^n \log{\frac{1}{\sqrt{2 \pi \sigma^2(t_{i} - t_{i-1})}}} - \sum_{i=1}^n \frac{x_i^2}{2\sigma^2(t_{i} - t_{i-1})} \\
   &= \sum_{i=1}^n \log{\frac{1}{\sqrt{2 \pi(t_{i} - t_{i-1})}}} + \sum_{i=1}^n \log{\frac{1}{\sqrt{\sigma^2}}} - \sum_{i=1}^n \frac{x_i^2}{2\sigma^2(t_{i} - t_{i-1})} \\
   &= \sum_{i=1}^n \log{\frac{1}{\sqrt{2 \pi(t_{i} - t_{i-1})}}} + n \log{\frac{1}{\sqrt{\sigma^2}}} - \frac{1}{\sigma^2} \sum_{i=1}^n \frac{x_i^2}{2(t_{i} - t_{i-1})} \\
-\implies \frac{\partial \ell}{\partial(\sigma^2)} &= - \frac{n}{2 \sigma^2} + \frac{1}{\sigma^4} \sum_{i=1}^n \frac{x_i^2}{2(t_{i} - t_{i-1})} \\
+\implies \frac{\partial \ell}{\partial(\sigma^2)} &= - \frac{n}{2 \sigma^2} + \frac{1}{\sigma^4} \sum_{i=1}^n \frac{x_i^2}{2(t_{i} - t_{i-1})}
 \end{align}
 
 The MLE therefore:
@@ -87,6 +96,12 @@ The MLE therefore:
 \end{align}
 
 ```{r}
+# Compute likelihood of a given random walk
+#   steptimes: timepoints
+#   stepsizes: the step size taken at a given timepoint
+#   u: mean of random walk
+#   v: variance of random walk
+# Returns: log-likelihood
 likRandomly <- function(steptimes, stepsizes, u=0, v=1) {
   timesteps<-c(steptimes[1], steptimes[2:length(steptimes)] - steptimes[1:(length(steptimes)-1)])
   logp <- dnorm(stepsizes, u, sqrt(v*timesteps), log = TRUE)
@@ -114,22 +129,28 @@ timesteps<-c(steptimes[1], steptimes[2:length(steptimes)] -
 sum(stepsizes^2/timesteps)/length(stepsizes)
 ```
 
-* Consider the tree in Figure 1 of the Mau et al paper
+* *Consider the tree in Figure 1 of the Mau et al paper
   \url{http://www.ncbi.nlm.nih.gov/pubmed/11318142} with leafs labelled 1 to 7.
   Let $X()$ be the result of performing standard Brownian motion on the tree,
   starting with $X=0$ at the root of the tree. Let $X^L$ denote the vector of
   values of $X()$ at the seven labelled leafs, and $X^i$ denote the values of
   $X()$ at the six labelled internal nodes, including the root node. So $(X^i,
   X^L)$ has a 13-variate normal distribution. Also $X^i_6=0$ because internal
-  node 6 is the root.
+  node 6 is the root.*
 
-  * Write code to simulate the value of $(X^i,X^L)$ given the coalescent times
-    $(t_1,\dots,t_6)$ [see Figure].
+  * *Write code to simulate the value of $(X^i,X^L)$ given the coalescent times
+    $(t_1,\dots,t_6)$ [see Figure].*
 
 ```{r}
+# Compute Brownian motion on the tree given in the paper. Numbered according to
+# the numbering given in Figure 1.
+#   ct: vector of coalescent times (length 6)
+#   u: mean of random walk
+#   v: variance of random walk
+# Returns: random walk on the tree (internal nodes and leaves separately)
 computeTreeRandomly <- function(ct, u=0, v=1) {
-  xi <- rep(0, 6)
-  xL <- rep(0, 7)
+  xi <- rep(0, 6) # internal nodes; index corresponds to figure label
+  xL <- rep(0, 7) # leaf nodes; index corresponds to figure label
 
   xi[6] <- 0
   xi[5] <- rnorm(1, u, sqrt(v*ct[6]))
@@ -148,33 +169,12 @@ computeTreeRandomly <- function(ct, u=0, v=1) {
 
   return(list(xi=xi, xL=xL))
 }
-# computeTreeRandomly <- function(ct, u=0, v=1) {
-#   xi <- rep(0, 6)
-#   xL <- rep(0, 7)
-#
-#   xi[6] <- 0
-#   xi[5] <- rnorm(1, u, v*ct[6])
-#   xi[4] <- xi[5] + rnorm(1, u, v*ct[5])
-#   xi[3] <- xi[5] + rnorm(1, u, v*(ct[5]+ct[4]))
-#   xi[2] <- xi[3] + rnorm(1, u, v*ct[3])
-#   xi[1] <- xi[4] + rnorm(1, u, v*(ct[3]+ct[2]+ct[4]))
-#
-#   xL[1] <- xi[4] + rnorm(1, u, v*(ct[4]+ct[3]+ct[2]+ct[1]))
-#   xL[4] <- xi[1] + rnorm(1, u, v*(ct[1]))
-#   xL[7] <- xi[1] + rnorm(1, u, v*(ct[1]))
-#   xL[2] <- xi[3] + rnorm(1, u, v*(ct[3]+ct[2]+ct[1]))
-#   xL[3] <- xi[2] + rnorm(1, u, v*(ct[2]+ct[1]))
-#   xL[6] <- xi[2] + rnorm(1, u, v*(ct[2]+ct[1]))
-#   xL[5] <- rnorm(1, u, v*sum(ct))
-#
-#   return(list(xi=xi, xL=xL))
-# }
 ```
 
-  * Assume from now on that the coalescence times $t_j=1$ for each $j$.
+  * *Assume from now on that the coalescence times $t_j=1$ for each $j$.
     Compute the covariance matrix for $(X^i,X^L)$. [Hint: you could write
     $(X^i,X^L)=AZ$ for some matrix $A$, where $Z$ is a vector whose elements
-    are iid and standard normal; then the covariance is $AA'$.]
+    are iid and standard normal; then the covariance is $AA'$.]*
 
 ```{r}
 coalescenttimes <- c(1, 1, 1, 1, 1, 1)
@@ -182,12 +182,14 @@ res <- computeTreeRandomly(coalescenttimes)
 xi <- res$xi
 xL <- res$xL
 walk <- c(xi, xL)
+walk
 ```
 
-Each edge in the graph is independent of other edges, so model the tree as a
-linear combination of edges.
+To compute the covariance matrix, treat each edge in the graph is independent
+of other edges, so model the tree as a linear combination of edges.
 
 ```{r}
+# edge lengths (ordered by left to right, then top to bottom)
 edgelengths <- c(4, 1, 1, 3, 2, 2, 6,
                  3, 1, 1, 2, 1)
 
@@ -211,16 +213,17 @@ A <- matrix(nrow=13, ncol=12, byrow=T,
               path_xL1, path_xL2, path_xL3, path_xL4, path_xL5, path_xL6,
               path_xL7))
 
-# A <- A %*% diag(sqrt(edgelengths)) # this way the linear combo is of standard normals
+A <- A %*% diag(sqrt(edgelengths)) # this way the linear combo is of standard normals
 # A <- A %*% diag(edgelengths) # this way the linear combo is of standard normals
-covar <- A %*% diag(edgelengths) %*% t(A)
+# covar <- A %*% diag(edgelengths) %*% t(A)
+covar <-  A %*% t(A)
 covar
 ```
 
-  * Check that your answer for the covariance and your simulation code roughly
+  * *Check that your answer for the covariance and your simulation code roughly
     agree. Specifically, simulate 10,000 times from $(X^i,X^L)$ using your code
     with $t_j=1$, and compare the empirical covariance matrix with your
-    computation.
+    computation.*
 
 ```{r}
 nsims <- 10000
@@ -232,25 +235,41 @@ for (i in 1:nsims) {
   runs[i,] <- c(res$xi, res$xL)
 }
 cov(runs)
+
+sum(cov(runs)-covar)/sum(covar)
 ```
 
-  * Compute the precision matrix (inverse of the covariance matrix) for
+The results match. The covariance values are within an order of magnitude of
+each other, and the relative deviation is around $.02$, so it is reasonable to
+assume the simulation matches the expectation.
+
+
+  * *Compute the precision matrix (inverse of the covariance matrix) for
     $(X^i,X^L)$. [Although you should never compute the inverse of a matrix,
     you are permitted do so here for pedagogical reasons!] Also find the
     covariance matrix for $X^i$, the covariance matrix for $X^L$ and their
     inverses. Relate the sparsity patterns you do or do not see in the
-    precision matrices to what you know about Gaussian Graphical Models.
+    precision matrices to what you know about Gaussian Graphical Models.*
 
-Precision matrix (total)
+The precision matrix is the inverse of the covariance matrix:
+
+**Precision matrix (total)**
 
 ```{r}
-ginv(covar)
+ginv(covar) # invert the actual covariance matrix, not the simulated one.
 ```
 
-Everything is conditionally independent of leaf 5.
+Given the root node (column 6), leaf 5 (column 11) is conditionally independent
+of the rest of the tree. The values of the precision matrix at column 5 are
+nearly 0, which is what is expected.
 
+Other conditional independences given the tree structure, such as $X_{i=1}$
+with the rest of the tree except child nodes $X_4$ and $X_7$.
 
-Covariance/Precision matrix for internal nodes:
+**Covariance/Precision matrix for internal nodes**
+
+The covariance matrix is simply a subset of the total covariance matrix, and
+the precision matrix its inverse:
 
 ```{r}
 covar_i <- covar[1:6, 1:6]
@@ -258,7 +277,13 @@ covar_i
 ginv(covar_i)
 ```
 
-Covariance/Precision matrix for leaves:
+Internal nodes on different sides of the tree are conditionally independent of
+one another, which is demonstrated as the corresponding entries in the
+precision matrix are 0. Internal nodes are also conditionally independent if
+separated by one node between them, as shown in pairs (5,2) and (5,1). 
+
+
+**Covariance/Precision matrix for leaves**:
 
 ```{r}
 covar_L <- covar[7:13, 7:13]
@@ -266,18 +291,21 @@ covar_L
 ginv(covar_L)
 ```
 
-Internal nodes that are more distance from each other on the tree are more
-independent. Nodes that are conditionally independent given the position of the
-root also have near-0 entries in the precision matrices.
+Leaves in the precision matrix have pairwise entries near 0 when separated by
+one leaf node (4,7) and (3,6). The rest are not conditionally independent,
+except for leaf 5.
+
+In general, for the set and both subsets, internal nodes that are more distant
+from one another on the tree are more independent (smaller covariance).
 
 
 ## B: Spatial Gaussian Processes
 
-* Consider the data from
+* *Consider the data from
   \url{http://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.0030339},
   available at https://github.com/stephens999/hgen48600/tree/master/data/CCR5,
   which you can read into R using code from
-  https://stephens999.github.io/hgen48600/ccr5.html
+  https://stephens999.github.io/hgen48600/ccr5.html*
 
 ```{bash, message=F}
 wget -nc https://raw.githubusercontent.com/stephens999/hgen48600/master/data/CCR5/CCR5.freq.txt
@@ -288,7 +316,7 @@ ccr5 <- read.table("CCR5.freq.txt",header=TRUE)
 ccr5[,1] <- ifelse(ccr5[,1]>180,ccr5[,1]-360,ccr5[,1]) # changes longitudes>180 to negative
 ```
 
-* These consist of latitude, longitude, and an allele frequency at each
+* *These consist of latitude, longitude, and an allele frequency at each
   location. We will model these data as a Gaussian process. Since allele
   frequency lies in [0,1] start by using the transformation
   $x=\log(\hat{f}/(1-\hat{f}))$. (Here $\hat{f}$ is the estimated frequency in
@@ -296,7 +324,7 @@ ccr5[,1] <- ifelse(ccr5[,1]>180,ccr5[,1]-360,ccr5[,1]) # changes longitudes>180 
   longitude) and $x()$ denote the allele frequency varying as a function of
   space, so $x(y)$ is the allele frequency at location $y$. We will model $x()$
   as a Gaussian process, with constant mean $\mu=m$ and squared exponential
-  covariance function of the form $a_1 \exp(-(d/a_2)^2)$.
+  covariance function of the form $a_1 \exp(-(d/a_2)^2)$.*
 
 ```{r}
 ccr5$count = round(ccr5$Freq* ccr5$SampleSize * 2)
@@ -304,18 +332,22 @@ ccr5$fhat = (ccr5$count+1)/(ccr5$SampleSize*2+2)
 ccr5$X = log(ccr5$fhat/(1-ccr5$fhat))
 ```
 
-* Hence, $a=(a_1,a_2)$ and the mean $m$ are the parameters to be estimated.
+* *Hence, $a=(a_1,a_2)$ and the mean $m$ are the parameters to be estimated.*
 
-* Write a function to compute the covariance matrix for
+* *Write a function to compute the covariance matrix for
   $x^{\text{obs}}:=(x(y_1),\hdots,x(y_r))$ given a value of $a$. Here
   $y_1,\dots,y_r$ are the locations at which you have observations in the
   dataset. Try a few values of $a$ and check that the resulting covariance
   matrix is valid - that is, it is positive semi-definite. (You can use the
-  `eigen` function to check the eigenvalues are non-negative).
+  `eigen` function to check the eigenvalues are non-negative).*
 
 ```{r}
+# Use squared exponential kernel to compute covariance matrix using pairwise
+# distances between datapoints.
+#   f: dataframe containing ccr5 data
+#   a1, a2: parameters for kernel
+# Returns covariance matrix
 computeCovarianceMatrix <- function(f, a1, a2) {
-  # d2 <- geosphere::distm(f[,1:2])
   d2 <- geosphere::distm(f[,1:2])/1000 # keep in km
   return(a1*exp( -(d2/a2)^2 ))
 }
@@ -329,6 +361,8 @@ res <- eigen(covar)
 sum(res$values < 0) # number of negative eigenvalues
 ```
 
+There are no negative eigenvalues for $(a_1=1,a_2=1)$.
+
 ```{r}
 a1 <- 1
 a2 <- 100
@@ -336,6 +370,8 @@ covar <- computeCovarianceMatrix(ccr5, a1, a2)
 res <- eigen(covar)
 sum(res$values < 0) # number of negative eigenvalues
 ```
+
+There are no negative eigenvalues for $(a_1=1,a_2=100)$.
 
 ```{r}
 a1 <- 10
@@ -345,17 +381,23 @@ res <- eigen(covar)
 sum(res$values < 0) # number of negative eigenvalues
 ```
 
-* Write a function to compute the log-likelihood for the data $x^\text{obs}$,
-  given $a,m$. [Here we assume the mean is constant across the whole region, so
-  $m$ is the same at every location].
+There are no negative eigenvalues for $(a_1=10,a_2=.1)$.
 
-  * The model here is that $x^{\text{obs}} | m, a \sim N_r(\mu, \Sigma)$ where
+* *Write a function to compute the log-likelihood for the data $x^\text{obs}$,
+  given $a,m$. [Here we assume the mean is constant across the whole region, so
+  $m$ is the same at every location].*
+
+  * *The model here is that $x^{\text{obs}} | m, a \sim N_r(\mu, \Sigma)$ where
     $\Sigma=\Sigma(a)$ is the function of $a$ that you coded above and
     $\mu=rep(m,r)$. So your likelihood just involves computing a multivariate
-    normal density. You can use the R function mvtnorm::dmvnorm (with log=TRUE)
+    normal density. You can use the R function mvtnorm::dmvnorm (with log=TRUE)*
 
 
 ```{r}
+# Compute the log-likelihood of data
+#   f: dataframe containing ccr5 data
+#   m: mean (single value)
+#   a1, a2: parameters of covariance kernel
 computeSELogLikelihood <- function(f, m, a1, a2) {
   mu <- rep(m, dim(f)[1])
   covar <- computeCovarianceMatrix(f, a1, a2)
@@ -364,21 +406,20 @@ computeSELogLikelihood <- function(f, m, a1, a2) {
 ```
 
 ```{r}
-# computeSELogLikelihood(c(0, 1, 1), ccr5)
-# computeSELogLikelihood(c(0, 1, .1), ccr5)
-# computeSELogLikelihood(c(0, 1, 10), ccr5)
 computeSELogLikelihood(ccr5, 1, 1, 1)
 computeSELogLikelihood(ccr5, 10, 1, .1)
-computeSELogLikelihood(ccr5, 1, .5, 100)
+computeSELogLikelihood(ccr5, 0, 1, 100)
 ```
 
 
-* Try using the R function `optim` (or another approach if you prefer) to
+* *Try using the R function `optim` (or another approach if you prefer) to
   optimize the likelihood numerically over $a,m$. (I found it seemed to work
   OK, in that it gave similar answers from different starting points, although
-  it reported convergence=0; I'm not sure why).
+  it reported convergence=0; I'm not sure why).*
 
 ```{r}
+# Redefine the log-likelihood computation to be compatible with the `optim`
+# program.
 computeSELogLikelihoodOptim <- function(par, f) {
   m <- par[1]
   a1 <- par[2]
@@ -391,28 +432,51 @@ computeSELogLikelihoodOptim <- function(par, f) {
 
 ```{r}
 r1 <- optim(par=c(0,1,100), fn=computeSELogLikelihoodOptim, f=ccr5)
-# r2 <- optim(par=c(1,1,1), fn=computeSELogLikelihoodOptim, f=ccr5)
-# r3 <- optim(par=c(10,10,10), fn=computeSELogLikelihoodOptim, f=ccr5)
-# r4 <- optim(par=c(10,10,10), fn=computeSELogLikelihoodOptim, f=ccr5)
-r1
+r1$par
+-r1$value
+```
 
+Note, `optim` will give different results given different starting points (see
+below). The above parameterization was chosen because among several fittings,
+it was the maximum of the likelihoods.
+
+```{r}
+r2 <- optim(par=c(1,1,1), fn=computeSELogLikelihoodOptim, f=ccr5)
+r2$par
+-r2$value
+r3 <- optim(par=c(10,.1,.1), fn=computeSELogLikelihoodOptim, f=ccr5)
+r3$par
+-r3$value
+r4 <- optim(par=c(100,100,100), fn=computeSELogLikelihoodOptim, f=ccr5)
+r3$par
+-r3$value
+```
+
+```{r}
+# Generate mean vector and covariance matrix from fitted parameters
 mu <- rep(r1$par[1], dim(ccr5)[1])
 covar <- computeCovarianceMatrix(ccr5, r1$par[2], r1$par[3])
 res <- eigen(covar)
 sum(res$values < 0) # number of negative eigenvalues
 ```
 
-* Now we are going to try deleting each of the observed data points in turn and
-  "impute" its value using our model. This process is sometimes known as
-  Kriging.
+* *Now we are going to try deleting each of the observed data points in turn
+  and "impute" its value using our model. This process is sometimes known as
+  Kriging.*
 
-  * Let $X=(X_1,\dots,X_r)$ be $r$-variate normal with mean $\mu$ and variance
+  * *Let $X=(X_1,\dots,X_r)$ be $r$-variate normal with mean $\mu$ and variance
     covariance $\Sigma$. Write a function to compute the conditional
-    expectation of $X_1$ given $X_2,\dots,X_r$. [This is an application of
+    expectation of $X_1$ given $X_2,\dots,X_r$. This is an application of
     standard results for the conditional mean of a Gaussian from, e.g.
-    \url{https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Conditional_distributions]}
+    \url{https://en.wikipedia.org/wiki/Multivariate_normal_distribution\#Conditional_distributions}*
 
 ```{r}
+# Impute a particular data point given the other data
+#   idx: index of datapoint to impute
+#   f: ccr5 data
+#   mu: vector of means
+#   covar: vector of covariances
+# Returns imputed value x
 imputeData <- function(idx, f, mu, covar) {
   mu1 <- mu[idx]
   mu2 <- mu[-idx]
@@ -427,16 +491,16 @@ imputeData <- function(idx, f, mu, covar) {
 }
 ```
 
-  * Apply this function to compute $\text{E}(x(y_1) | x(y_2),...,x(y_r))$.
+  * *Apply this function to compute $\text{E}(x(y_1) | x(y_2),...,x(y_r))$.
     Notice that this expectation ends up being a weighted linear combination of
     the other datapoints. Intuitively, if allele frequencies vary smoothly in
     space then this weighted linear combination should weight the nearby data
-    points more. Does it?
+    points more. Does it?*
 
-```{r}
-ccr5$X[1]
-imputeData(1, ccr5, mu, covar)
-```
+**Impute the first datapoint:**
+
+Plot the magnitude of the weights for the other datapoints used in the
+imputation against the distances (km) between them.
 
 ```{r}
 covar11 <- covar[1,1]
@@ -445,8 +509,11 @@ covar22 <- covar[-1,-1]
 
 w <- covar12 %*% ginv(covar22)
 d <- geosphere::distm(ccr5[,1:2])[1,]/1000 # keep in km
-qplot(d[-1], abs(as.vector(w)))
+qplot(d[-1], abs(as.vector(w)), ylab='weights', xlab='distance (km)')
 ```
+
+
+**And again for the 50th datapoint:**
 
 ```{r}
 covar11 <- covar[50,50]
@@ -455,32 +522,46 @@ covar22 <- covar[-50,-50]
 
 w <- covar12 %*% ginv(covar22)
 d <- geosphere::distm(ccr5[,1:2])[50,]/1000 # keep in km
-qplot(d[-50], abs(as.vector(w)))
+qplot(d[-50], abs(as.vector(w)), ylab='weights', xlab='distance (km)')
 ```
 
+The imputation more heavily weights nearby datapoints and weights more distant
+ones to nearly 0. Should an entry be distance from all other points, then the
+imputation will effectively be using the mean to estimate it.
 
-  * Repeat this for each of the $r$ datapoints.
+  * *Repeat this for each of the $r$ datapoints.*
 
 ```{r}
 Xbar <- rep(0, dim(ccr5)[1])
 for (i in 1:dim(ccr5)[1]) {
   Xbar[i] <- imputeData(i, ccr5, mu, covar)
 }
-qqplot(ccr5$X, Xbar)
-abline(0,1)
+qplot(ccr5$X, Xbar, xlab='data', ylab='estimates')
 ```
 
-  * How does the accuracy of this imputation scheme compare with just using the
-    mean of the other datapoints to impute each datapoint?
+  * *How does the accuracy of this imputation scheme compare with just using the
+    mean of the other datapoints to impute each datapoint?*
 
 ```{r}
 Xmean <- rep(0, dim(ccr5)[1])
 for (i in 1:dim(ccr5)[1]) {
   Xmean[i] <- mean(ccr5$X[-i])
 }
-qqplot(ccr5$X, Xmean)
-abline(0,1)
+qplot(ccr5$X, Xmean, xlab='data', ylab='estimates')
 ```
+
+The unweighted imputations are confined to a much narrower range and are very
+unreliable when imputing data that deviate from the mean.
+
+```{r}
+error_Xbar <- sum((ccr5$X - Xbar)^2)
+error_Xmean <- sum((ccr5$X - Xmean)^2)
+error_Xbar
+error_Xmean
+```
+
+The squared error from using the covariance-weighted imputations is less than
+that of using the means of all other datapoints.
 
 
 ## C:
@@ -494,13 +575,43 @@ a) *Write down the kernel matrix for the two parents and the offspring based on
    their genetic similarity, i.e. using the genetic correlation. Let's assume
    random mating and approximate the correlation between parents as 0.*
 
-The relatedness matrix (Child, Father, Mother) is:
+The genetic relatedness matrix (Child, Father, Mother) is:
 
 \[ \Sigma = \left[
   \begin{array}{ccc}
     1  & .5 & .5  \\
     .5 & 1  & 0 \\
     .5 & 0  & 1 \\
+  \end{array}
+\right] \]
+
+This matrix can be represented in block matrix form:
+
+\[ \Sigma = \left[
+  \begin{array}{cc}
+    \Sigma_{11} & \Sigma_{12} \\
+    \Sigma_{21} & \Sigma_{22} \\
+  \end{array}
+\right] \]
+
+where:
+
+\[ \Sigma_{11} = \left[
+  \begin{array}{c}
+    1 \\
+  \end{array}
+\right]\textrm{,} \]
+
+\[ \Sigma_{12} = \left[
+  \begin{array}{cc}
+    .5 & .5 \\
+  \end{array}
+\right]\textrm{, and} \]
+
+\[ \Sigma_{22} = \left[
+  \begin{array}{cc}
+    1 & 0 \\
+    0 & 1 \\
   \end{array}
 \right] \]
 
@@ -529,3 +640,14 @@ expression simplifies further.
 
 Therefore, the conditional expectation for child height computed by kriging is
 simply the average of the mother's and father's heights.
+
+The variance of the estimate is:
+
+\begin{align}
+\bar{\Sigma} &= \Sigma_{11} + \Sigma_{12} \Sigma_{22}^{-1} \Sigma_{21} \\
+  &= 1 - \left[ \begin{array}{cc} .5 & .5 \end{array} \right]  \left[ \begin{array}{cc} 1 & 0 \\ 0 & 1 \end{array} \right]^{-1} \left[ \begin{array}{c} .5 \\ .5 \end{array} \right] \\
+  &= 1 - \left[ \begin{array}{cc} .5 & .5 \end{array} \right] \left[ \begin{array}{c} .5 \\ .5 \end{array} \right] \\
+  &= 1 - (.25 + .25) \\
+  &= .5
+\end{align}
+
