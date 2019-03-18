@@ -9,3 +9,7 @@ output: pdf_document
 \begin{align}
   r &= \log{\lambda_{max}}
 \end{align}
+
+\begin{align}
+  \textrm{P(survival)} &\propto \frac{1}{b_x^s}
+\end{align}
