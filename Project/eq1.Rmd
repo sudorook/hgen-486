@@ -1,0 +1,11 @@
+---
+output: pdf_document
+---
+
+\begin{align}
+  \underline{X}_n &= \frac{(D+B)^n \underline{X}_0}{\left\Vert (D+B)^n \underline{X}_0 \right\Vert}_1
+\end{align}
+
+\begin{align}
+  r &= \log{\lambda_{max}}
+\end{align}
