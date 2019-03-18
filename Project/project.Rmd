@@ -16,34 +16,7 @@ set.seed(10)
 ```
 
 
-# Trying stuff out
-
-```{r}
-# d <- .2
-# Q <- matrix(nrow=5, c(-1, 1-d, 0, 0, d,
-#                       0, -1, 1-d, 0, d,
-#                       0, 0, -1, 1-d, d,
-#                       0, 0, 0, -1, 1,
-#                       0, 0, 0, 0, 0), byrow=T)
-# 
-# P <- expm(Q)[-5,-5]
-# B <- matrix(nrow=4, c(0, 1, 1, 0,
-#                       0, 0, 0, 0,
-#                       0, 0, 0, 0,
-#                       0, 0, 0, 0))
-#                       # 0, 0, 0, 0), byrow=T)
-# 
-# x0 <- c(1, 0, 0, 0)
-# 
-# x1 <- (x0 %*% (P+B)) / sum(x0 %*% (P+B))
-# x2 <- (x1 %*% (P+B)) / sum(x1 %*% (P+B))
-# x3 <- (x2 %*% (P+B)) / sum(x2 %*% (P+B))
-# x4 <- (x3 %*% (P+B)) / sum(x3 %*% (P+B))
-```
-
-
 # Functions
-
 
 ```{r}
 # flatDeathRates <- function(t, d, a=1, b=1) {
@@ -86,7 +59,7 @@ flatBirthRates <- function(t, a, w, m, v) {
 
 normalBirthRates <- function(age, a, w, m, v) {
   p <- dnorm(age, m, sqrt(v))
-  return(p/sum(p))
+  return((w-a+1)*p/sum(p))
 }
 
 makeBirthMatrix <- function(fxn, tstep, lambda, a=0, w=0, m=1, v=0, b=1) {
@@ -191,18 +164,18 @@ for (i in 1:length(alphas)) {
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
   df_alpha[i,] <- Re(x_pi)
 }
-header <- paste('α=0', alphas[1:ceiling(9/alphastep)], sep='')
-header <- c(header, paste('α=', alphas[-(1:ceiling(9/alphastep))], sep=''))
+header <- paste('alpha=0', alphas[1:ceiling(9/alphastep)], sep='')
+header <- c(header, paste('alpha=', alphas[-(1:ceiling(9/alphastep))], sep=''))
 
 rownames(df_alpha) <- header
 colnames(df_alpha_r) <- 'r'
 df_alpha <- tbl_df(t(df_alpha))
 
 df_alpha <- df_alpha %>% mutate("age"=seq(1,lambda))
-df_alpha %>% gather(α, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=α) + geom_line()
+df_alpha %>% gather(alpha, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=alpha) + geom_line()
 
-df_alpha_r <- tbl_df(df_alpha_r) %>% mutate(α=alphas)
-df_alpha_r %>% ggplot() + aes(x=α, y=r) + geom_line() + geom_hline(aes(yintercept=0))
+df_alpha_r <- tbl_df(df_alpha_r) %>% mutate(alpha=alphas)
+df_alpha_r %>% ggplot() + aes(x=alpha, y=r) + geom_line() + geom_hline(aes(yintercept=0))
 ```
 
 Plot different 'menopause' distribution (omega) holding other things constant.
@@ -220,12 +193,12 @@ for (i in 1:length(omegas)) {
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
   df_omega[i,] <- Re(x_pi)
 }
-header <- paste('ω=', omegas, sep='')
+header <- paste('omega=', omegas, sep='')
 rownames(df_omega) <- header
 df_omega <- tbl_df(t(df_omega))
 
 df_omega <- df_omega %>% mutate("age"=seq(1,lambda))
-df_omega %>% gather(ω, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=ω) + geom_line()
+df_omega %>% gather(omega, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=omega) + geom_line()
 
 qplot(omegas, df_omega_r, geom='line')
 ```
@@ -409,18 +382,18 @@ for (i in 1:length(alphas)) {
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
   df_alpha[i,] <- Re(x_pi)
 }
-header <- paste('α=0', alphas[1:ceiling(9/alphastep)], sep='')
-header <- c(header, paste('α=', alphas[-(1:ceiling(9/alphastep))], sep=''))
+header <- paste('alpha=0', alphas[1:ceiling(9/alphastep)], sep='')
+header <- c(header, paste('alpha=', alphas[-(1:ceiling(9/alphastep))], sep=''))
 
 rownames(df_alpha) <- header
 colnames(df_alpha_r) <- 'r'
 df_alpha <- tbl_df(t(df_alpha))
 
 df_alpha <- df_alpha %>% mutate("age"=seq(1,lambda))
-df_alpha %>% gather(α, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=α) + geom_line()
+df_alpha %>% gather(alpha, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=alpha) + geom_line()
 
-df_alpha_r <- tbl_df(df_alpha_r) %>% mutate(α=alphas)
-df_alpha_r %>% ggplot() + aes(x=α, y=r) + geom_line() + geom_hline(aes(yintercept=0))
+df_alpha_r <- tbl_df(df_alpha_r) %>% mutate(alpha=alphas)
+df_alpha_r %>% ggplot() + aes(x=alpha, y=r) + geom_line() + geom_hline(aes(yintercept=0))
 ```
 
 Plot different 'menopause' distribution (omega) holding other things constant.
@@ -439,12 +412,12 @@ for (i in 1:length(omegas)) {
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
   df_omega[i,] <- Re(x_pi)
 }
-header <- paste('ω=', omegas, sep='')
+header <- paste('omega=', omegas, sep='')
 rownames(df_omega) <- header
 df_omega <- tbl_df(t(df_omega))
 
 df_omega <- df_omega %>% mutate("age"=seq(1,lambda))
-df_omega %>% gather(ω, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=ω) + geom_line()
+df_omega %>% gather(omega, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=omega) + geom_line()
 
 qplot(omegas, df_omega_r, geom='line')
 ```
@@ -517,18 +490,18 @@ for (i in 1:length(alphas)) {
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
   df_alpha[i,] <- Re(x_pi)
 }
-header <- paste('α=0', alphas[1:ceiling(9/alphastep)], sep='')
-header <- c(header, paste('α=', alphas[-(1:ceiling(9/alphastep))], sep=''))
+header <- paste('alpha=0', alphas[1:ceiling(9/alphastep)], sep='')
+header <- c(header, paste('alpha=', alphas[-(1:ceiling(9/alphastep))], sep=''))
 
 rownames(df_alpha) <- header
 colnames(df_alpha_r) <- 'r'
 df_alpha <- tbl_df(t(df_alpha))
 
 df_alpha <- df_alpha %>% mutate("age"=seq(1,lambda))
-df_alpha %>% gather(α, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=α) + geom_line()
+df_alpha %>% gather(alpha, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=alpha) + geom_line()
 
-df_alpha_r <- tbl_df(df_alpha_r) %>% mutate(α=alphas)
-df_alpha_r %>% ggplot() + aes(x=α, y=r) + geom_line() + geom_hline(aes(yintercept=0))
+df_alpha_r <- tbl_df(df_alpha_r) %>% mutate(alpha=alphas)
+df_alpha_r %>% ggplot() + aes(x=alpha, y=r) + geom_line() + geom_hline(aes(yintercept=0))
 ```
 
 Plot different 'menopause' distribution (omega) holding other things constant.
@@ -540,19 +513,18 @@ df_omega <- matrix(0, nrow=length(omegas), ncol=lambda)
 df_omega_r <- matrix(0, nrow=length(omegas), ncol=1)
 for (i in 1:length(omegas)) {
   P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, d, 2, .5)
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, d, 1, 1)
   B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b)
   res<-eigen(t(P+B))
   df_omega_r[i] <- log(Re(res$values[1]))
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
   df_omega[i,] <- Re(x_pi)
 }
-header <- paste('ω=', omegas, sep='')
+header <- paste('omega=', omegas, sep='')
 rownames(df_omega) <- header
 df_omega <- tbl_df(t(df_omega))
 
 df_omega <- df_omega %>% mutate("age"=seq(1,lambda))
-df_omega %>% gather(ω, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=ω) + geom_line()
+df_omega %>% gather(omega, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=omega) + geom_line()
 
 qplot(omegas, df_omega_r, geom='line')
 ```
@@ -587,3 +559,194 @@ qplot(deaths, df_death_r, geom='line')
 
 Given a death distribution, find the distribution of alpha, omega, and lambda
 parameters that maximize r.
+
+
+## Uniform survival
+
+```{r}
+
+computeGrowthRate <- function(birthFxn, deathFxn, tstep, B, lambda, alpha,
+                              omega, m, v, death, death_a, death_b) {
+  P <- makeSurvivalMatrix(deathFxn, tstep, lambda, d=death, death_a, death_b)
+  B <- makeBirthMatrix(birthFxn, tstep, lambda, alpha, omega, m, v, B)
+  res<-eigen(t(P+B))
+  return(log(Re(res$values[1])))
+}
+
+updateParameter <- function(cur, move_m, move_sd, lower, upper, type) {
+  if (type == 'int' ) {
+    param <- cur + round(rnorm(1, mean=move_m, sd=move_sd)) # keep integer
+  } else if (type == 'double') {
+    param <- cur + rnorm(1, mean=move_m, sd=move_sd) # keep double
+  }
+
+  if (param > upper) {
+    param <- updateParameter(cur, move_m, move_sd, lower, upper, type)
+  } else if (param < lower) {
+    param <- updateParameter(cur, move_m, move_sd, lower, upper, type)
+  }
+  # } else if (param == cur) {
+  #   param <- updateParameter(cur, move_m, move_sd, lower, upper, type)
+  # }
+
+  return(param)
+}
+
+growthRateMCMC <- function(birthFxn, deathFxn, niter=1000, tstep=1, B0=20,
+                           lambda0=50, alpha0=15, omega0=30, m0=20, v0=5,
+                           death=.01, death_a=1, death_b=1) {
+  d <- death
+  d_a <- death_a
+  d_b <- death_b
+
+  lambdas <- rep(0, niter+1)
+  alphas <- rep(0, niter+1)
+  omegas <- rep(0, niter+1)
+  ms <- rep(0, niter+1)
+  vs <- rep(0, niter+1)
+  Bs <- rep(0, niter+1)
+  rs <- rep(0, niter+1)
+
+  lambdas[1] <- lambda0
+  alphas[1] <- alpha0
+  omegas[1] <- omega0
+  ms[1] <- m0
+  vs[1] <- v0
+  Bs[1] <- B0
+  rs[1] <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[1], lambdas[1],
+                             alphas[1], omegas[1], ms[1], vs[1], d, d_a, d_b)
+
+  for (i in 2:(niter+1)) {
+    current_r <- rs[i-1]
+
+    # Update alphas
+    # print('update alpha')
+    proposed_a <- updateParameter(alphas[i-1], 0, 1, 1, omegas[i-1]-1, 'int')
+    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1],
+                               lambdas[i-1], proposed_a, omegas[i-1], ms[i-1],
+                               vs[i-1], d, d_a, d_b)
+    A <- new_r/current_r
+    if (runif(1) < A) {
+      alphas[i] <- proposed_a
+    } else {
+      alphas[i] <- alphas[i-1]
+    }
+    
+    # Update omegas
+    # print('update omega')
+    proposed_w <- updateParameter(omegas[i-1], 0, 1, alphas[i], lambdas[i-1]-1, 'int')
+    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1],
+                               lambdas[i-1], alphas[i], proposed_w, ms[i-1],
+                               vs[i-1], d, d_a, d_b)
+    A <- new_r/current_r
+    if (runif(1) < A) {
+      omegas[i] <- proposed_w
+    } else {
+      omegas[i] <- omegas[i-1]
+    }
+    
+    # Update lambdas
+    # print('update lambda')
+    proposed_l <- updateParameter(lambdas[i-1], 0, 1, omegas[i], 10*lambda0, 'int')
+    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1],
+                               proposed_l, alphas[i], omegas[i], ms[i-1],
+                               vs[i-1], d, d_a, d_b)
+    A <- new_r/current_r
+    if (runif(1) < A) {
+      lambdas[i] <- proposed_l
+    } else {
+      lambdas[i] <- lambdas[i-1]
+    }
+    
+    # Update means
+    proposed_m <- updateParameter(ms[i-1], 0, .5, 0, lambdas[i], 'double')
+    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1],
+                               lambdas[i], alphas[i], omegas[i], proposed_m,
+                               vs[i-1], d, d_a, d_b)
+    A <- new_r/current_r
+    if (runif(1) < A) {
+      ms[i] <- proposed_m
+    } else {
+      ms[i] <- ms[i-1]
+    }
+    
+    # Update variances
+    proposed_v <- updateParameter(vs[i-1], 0, .1, 0, lambdas[i], 'double')
+    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1],
+                               lambdas[i], alphas[i], omegas[i], ms[i],
+                               proposed_v, d, d_a, d_b)
+    A <- new_r/current_r
+    if (runif(1) < A) {
+      vs[i] <- proposed_v
+    } else {
+      vs[i] <- vs[i-1]
+    }
+    
+    # Update litter size
+    proposed_B <- updateParameter(Bs[i-1], 0, 1, 0, 1000, 'int')
+    # print(proposed_B)
+    # print(Bs[i-1])
+
+    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, proposed_B,
+                               lambdas[i], alphas[i], omegas[i], ms[i], vs[i],
+                               d, d_a, d_b)
+    # print(new_r)
+    # print(current_r)
+    A <- new_r/current_r
+    # print(A)
+    if (runif(1) < A) {
+      Bs[i] <- proposed_B
+    } else {
+      Bs[i] <- Bs[i-1]
+    }
+
+    rs[i] <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i], lambdas[i],
+                               alphas[i], proposed_w, ms[i], vs[i], d, d_a,
+                               d_b)
+  }
+
+  return(list(r=rs, l=lambdas, a=alphas, w=omegas, m=ms, v=vs, B=Bs))
+}
+```
+
+```{r}
+niter <- 100
+tstep <- 1
+B0 <- 5
+lambda0 <- 50
+alpha0 <- 15
+omega0 <- 30
+m0 <- 20
+v0 <- 5
+death <- .01
+death_a <- 1
+death_b <- 1
+```
+
+```{r}
+res <- growthRateMCMC(flatBirthRates, makeDeathRates, niter, tstep, B0,
+                      lambda0, alpha0, omega0, m0, v0, death, death_a, death_b)
+df_res <- tbl_df(res)
+```
+
+```{r}
+df_res[which.max(res$r),]
+```
+
+
+### Early mortality
+
+```{r}
+death_a <- .5
+death_b <- 2
+```
+
+```{r}
+res <- growthRateMCMC(flatBirthRates, makeDeathRates, niter, tstep, B0,
+                      lambda0, alpha0, omega0, m0, v0, death, death_a, death_b)
+df_res <- tbl_df(res)
+```
+
+```{r}
+df_res[which.max(res$r),]
+```
