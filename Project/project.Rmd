@@ -14,79 +14,77 @@ set.seed(10)
 ```
 
 
-# Functions
+# Define functions
 
 ```{r}
-# flatDeathRates <- function(t, d, a=1, b=1) {
-#   return((1-d) * rep(1,length(t)))
-# }
-
+# Use a beta function to generate survival probabilities for all states. Use
+# pbeta for discretization instead of dbeta to get the area between intervals.
 makeDeathRates <- function(t, a, w, d, d_a=1, d_b=1) {
   lambda <- max(t)+1
   p <- pbeta((t+1)/lambda, d_a, d_b) - pbeta(t/lambda, d_a, d_b)
   p <- 1-p
   p <- p/mean(p)
-  p[a:w] <- p[a:w]*(1-1/t[a:w])
-  p <- p * (1-d)
-  # p[-(a:w)] <- p[-(a:w)]*(1-d)
-  return(p)
-}
-
-makeDeathRates2 <- function(t, a, w, d, d_a=1, d_b=1) {
-  lambda <- max(t)+1
-  p <- pbeta((t+1)/lambda, d_a, d_b) - pbeta(t/lambda, d_a, d_b)
-  p <- 1-p
-  p <- p/mean(p)
   p <- p*(1-d)
-  # p[a:w] <- p[a:w]*(1-2*d)
-  # p[-(a:w)] <- p[-(a:w)]*(1-d)
   return(p)
 }
 
+# Generate the survival matrix using a survival function and the dimensions
+# specified by the demographic parameters of the population.
+#   fxn - fitness function
+#   tstep - time step between stages in the state chain
+#   lambda - longevity
+#   a - age of start of fertility
+#   w - age of end of fertility
+#   d - death probability for moving from stage to stage
+#   d_a - alpha parameter for the beta function
+#   d_b - beta parameter for the beta function
 makeSurvivalMatrix <- function(fxn, tstep, lambda, a, w, d=.1, d_a=1, d_b=1) {
   return(rbind(cbind(rep(0, lambda-1),
                      diag(lambda-1)),
                rep(0, lambda)) * fxn(seq(0, (lambda-1)*tstep), a, w, d, d_a, d_b))
 }
 
-# makeSurvivalMatrix <- function(fxn, tstep, lambda) {
-#   d <- fxn(seq(0, (lambda)*tstep, tstep))
-#   Q <- matrix(0, nrow=(lambda+1), ncol=(lambda+1))
-#   Q <- -diag(lambda+1) + rbind(cbind(rep(0, lambda), diag(lambda)), rep(0, lambda+1)) %*% diag(1-d)
-#   Q[,(lambda+1)] <- d
-#   Q[(lambda+1),(lambda+1)] <- 0
-#   Q[(lambda),(lambda+1)] <- 1
-# 
-#   return(expm(Q)[-(lambda+1),-(lambda+1)])
-# }
-
+# Uniform litter size
 flatBirthRates <- function(t, a, w, m, v) {
   b <- rep(0, length(t))
   b[a:w] <- 1
   return(b)
 }
 
+# Normal-shaped (due to discretization) litter size with age. It is scaled so
+# that the total fecundity for individuals (assuming survival) is the same as
+# that of the uniform litter size function.
 normalBirthRates <- function(age, a, w, m, v) {
   p <- dnorm(age, m, sqrt(v))
   return((w-a+1)*p/sum(p))
 }
 
+# Use the birth function and population parameters to make the birth matrix.
+#   fxn - litter size distribution function
+#   tstep - time step size
+#   lambda - longevity
+#   a - age of fertility (for uniform)
+#   w - age of end of fertility (for uniform)
+#   m - mean of normal litter size distribution (for normal)
+#   v - variance of litter size (for normal)
+#   b - litter size
 makeBirthMatrix <- function(fxn, tstep, lambda, a=0, w=0, m=1, v=0, b=1) {
   B <- matrix(0, nrow=lambda, ncol=lambda)
   B[1,] <- b*fxn(seq(0, (lambda-1)*tstep, tstep), a, w, m, v)
   return(t(B))
 }
 
-makeConstrainedBirthMatrix <- function(fxn, tstep, lambda, a=0, w=0, m=1, v=0, b=1) {
-  B <- matrix(0, nrow=lambda, ncol=lambda)
-  # B_survive <- diag(pmin(1, (log(seq(0,lambda-1)+1)/b)^2))
-  # B_survive <- diag(pmin(1, (log(seq(0,lambda-1)+1)/b)))
-  B_survive <- diag(pmin(1, (seq(0,lambda-1)/b^2)))
-  B[1,] <- b*fxn(seq(0, (lambda-1)*tstep, tstep), a, w, m, v) %*% B_survive
-  return(t(B))
-}
-
-makeConstrainedBirthMatrix2 <- function(fxn, tstep, lambda, a=0, w=0, m=1, v=0, b=1, s=2) {
+# Modify makeBirthMatrix to penalize large litter sizes.
+#   fxn - litter size distribution function
+#   tstep - time step size
+#   lambda - longevity
+#   a - age of fertility (for uniform)
+#   w - age of end of fertility (for uniform)
+#   m - mean of normal litter size distribution (for normal)
+#   v - variance of litter size (for normal)
+#   b - litter size
+#   s - strength of constraint against litter size
+makeConstrainedBirthMatrix <- function(fxn, tstep, lambda, a=0, w=0, m=1, v=0, b=1, s=1) {
   B <- matrix(0, nrow=lambda, ncol=lambda)
   # B_survive <- diag(pmin(1, (seq(0,lambda-1)/b)^s))
   B_survive <- diag((rep(1, lambda)/b)^s)
@@ -94,22 +92,11 @@ makeConstrainedBirthMatrix2 <- function(fxn, tstep, lambda, a=0, w=0, m=1, v=0, 
   return(t(B))
 }
 
+# Unused, eigenvalues are a much better solution...
 simulateGenerations <- function(x, P, B, n) {
   x_new <- x %*% ((P+B) %^% n)
   x_new <- x_new / sum(x_new)
   return(x_new)
-  
-  # X <- matrix(0, nrow=n, ncol=length(x))
-  # N <- matrix(0, nrow=n, ncol=1)
-  # X[1,] <- x
-  # N[1] <- sum(x)
-  # 
-  # for (i in 2:n) {
-  #   tmp <- X[i-1,] %*% (P+B)
-  #   X[i,] <- tmp / sum(tmp)
-  #   N[i] <- sum(tmp)
-  # }
-  # return(X)
 }
 ```
 
@@ -117,26 +104,25 @@ simulateGenerations <- function(x, P, B, n) {
 # Global variables
 
 ```{r}
-tstep <- 1
-# a <- 15
-a <- 20
-w <- 30
-b <- 5
-d <- .1
-m <- 20
-v <- 5
-lambda <- 50
-
-x <- rep(1/lambda, lambda)
+tstep <- 1   # timestep
+a <- 20      # fertile age
+w <- 30      # end fertile age
+b <- 5       # litter size
+d <- .1      # death change per timestep
+m <- 20      # mean normal birth function
+v <- 5       # var normal birth function
+s <- 1       # constraint
+lambda <- 50 # longevity
 ```
 
 
 # Simple simulations
 
-## Flat birth/death rates
+## Uniform birth/death rates
 
 ```{r}
-P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, a, w, d, 1, 1)
+# code for faffing about...
+P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
 # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, b)
 B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, b)
 
@@ -145,12 +131,9 @@ log(res$values[1])
 x_pi <- res$vectors[,1] / sum(res$vectors[,1])
 
 age <- seq(1, lambda, tstep)
-qplot(age, x)
-qplot(age, Re(x_pi))
-
-# log(x_pi[2])-log(x_pi[1])
-# log(x_pi[7])-log(x_pi[6])
 ```
+
+### Lambda
 
 Plot different values of lambda (longevity) holding other things constant.
 
@@ -158,18 +141,17 @@ Plot different values of lambda (longevity) holding other things constant.
 lambdas <- seq(w, 5*w, w)
 df_lambda <- matrix(0, nrow=length(lambdas), ncol=5*w)
 df_lambda_r <- matrix(0, nrow=length(lambdas), ncol=1)
+
 for (i in 1:length(lambdas)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambdas[i], a, w, d, 1, 1) 
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambdas[i], a, w, d, 1, 1) 
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambdas[i], a, w, m, v, b)
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambdas[i], a, w, m, v, b)
-  B <- makeConstrainedBirthMatrix2(flatBirthRates, tstep, lambdas[i], a, w, m, v, b, 2)
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambdas[i], a, w, d, 1, 1) 
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambdas[i], a, w, m, v, b, s)
   res<-eigen(t(P+B))
   df_lambda_r[i] <- log(Re(res$values[1]))
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
   # df_lambda[i,] <- c(Re(x_pi), rep(0, 5*w-lambdas[i]))
   df_lambda[i,] <- c(Re(x_pi), rep(NA, 5*w-lambdas[i]))
 }
+
 header <- paste('lambda', lambdas, sep=' ')
 rownames(df_lambda) <- header
 df_lambda <- tbl_df(t(df_lambda))
@@ -177,9 +159,13 @@ df_lambda <- df_lambda %>% mutate("age"=seq(1, 5*w))
 f1 <- df_lambda %>% gather(lambda, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=lambda) + geom_line()
 ggsave(file="freq_lambda-1-1.svg", plot=f1)
 
+# Plot growth rate given several values of lambda
 f2 <- qplot(lambdas, df_lambda_r, geom='line')
 ggsave(file="r_lambda-1-1.svg", plot=f2)
 ```
+
+
+### Alpha
 
 Plot different values of alpha (first reproduction age) holding other things
 constant.
@@ -190,11 +176,8 @@ alphas <- seq(1, (w-1), alphastep)
 df_alpha <- matrix(0, nrow=length(alphas), ncol=lambda)
 df_alpha_r <- matrix(0, nrow=length(alphas), ncol=1)
 for (i in 1:length(alphas)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, alphas[i], w, d, 1, 1)
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, alphas[i], w, d, 1, 1)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b)
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b)
-  B <- makeConstrainedBirthMatrix2(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b, 1)
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, alphas[i], w, d, 1, 1)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b, s)
   res<-eigen(t(P+B))
   df_alpha_r[i] <- log(Re(res$values[1]))
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
@@ -204,81 +187,39 @@ header <- paste('alpha=0', alphas[1:ceiling(9/alphastep)], sep='')
 header <- c(header, paste('alpha=', alphas[-(1:ceiling(9/alphastep))], sep=''))
 
 rownames(df_alpha) <- header
-colnames(df_alpha_r) <- 'r'
 df_alpha <- tbl_df(t(df_alpha))
 
-# df_alpha <- df_alpha %>% mutate("age"=seq(1,lambda))
-# f1 <- df_alpha %>% gather(alpha, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=alpha) + geom_line()
-# ggsave(file="freq_alpha-1-1.svg", plot=f1, width=6, height=4)
+df_alpha <- df_alpha %>% mutate("age"=seq(1,lambda))
+f1 <- df_alpha %>%
+  gather(alpha, freq, -age) %>%
+  ggplot() + aes(x=age,y=freq,color=alpha) + geom_line()
+ggsave(file="freq_alpha-1-1.svg", plot=f1, width=6, height=4)
 
-# df_alpha_r <- tbl_df(df_alpha_r) %>% mutate(alpha=alphas)
-# f2 <- df_alpha_r %>% ggplot() + aes(x=alpha, y=r) + geom_line()
-# ggsave(file="r_alpha-1-1.svg", plot=f2, width=6, height=4)
-```
-
-```{r}
-alphastep <- 1
-alphas <- seq(1, (w-1), alphastep)
-df_alpha <- matrix(0, nrow=length(alphas), ncol=lambda)
+# Plot extra curves for alpha given a different constraint s
 df_alpha_r2 <- matrix(0, nrow=length(alphas), ncol=1)
 for (i in 1:length(alphas)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, alphas[i], w, d, 1, 1)
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, alphas[i], w, d, 1, 1)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b)
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b)
-  B <- makeConstrainedBirthMatrix2(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b, 2)
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, alphas[i], w, d, 1, 1)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b, 2)
   res<-eigen(t(P+B))
   df_alpha_r2[i] <- log(Re(res$values[1]))
-  x_pi <- res$vectors[,1] / sum(res$vectors[,1])
-  df_alpha[i,] <- Re(x_pi)
 }
-header <- paste('alpha=0', alphas[1:ceiling(9/alphastep)], sep='')
-header <- c(header, paste('alpha=', alphas[-(1:ceiling(9/alphastep))], sep=''))
 
-rownames(df_alpha) <- header
-colnames(df_alpha_r2) <- 'r'
-df_alpha <- tbl_df(t(df_alpha))
-
-# df_alpha <- df_alpha %>% mutate("age"=seq(1,lambda))
-# f1 <- df_alpha %>% gather(alpha, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=alpha) + geom_line()
-# ggsave(file="freq_alpha-1-1.svg", plot=f1, width=6, height=4)
-# 
-# df_alpha_r <- tbl_df(df_alpha_r) %>% mutate(alpha=alphas)
-# f2 <- df_alpha_r %>% ggplot() + aes(x=alpha, y=r) + geom_line()
-# ggsave(file="r_alpha-1-1.svg", plot=f2, width=6, height=4)
-```
-
-```{r}
-alphastep <- 1
-alphas <- seq(1, (w-1), alphastep)
-df_alpha <- matrix(0, nrow=length(alphas), ncol=lambda)
 df_alpha_r3 <- matrix(0, nrow=length(alphas), ncol=1)
 for (i in 1:length(alphas)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, alphas[i], w, d, 1, 1)
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, alphas[i], w, d, 1, 1)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b)
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b)
-  B <- makeConstrainedBirthMatrix2(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b, .5)
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, alphas[i], w, d, 1, 1)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b, .5)
   res<-eigen(t(P+B))
   df_alpha_r3[i] <- log(Re(res$values[1]))
-  x_pi <- res$vectors[,1] / sum(res$vectors[,1])
-  df_alpha[i,] <- Re(x_pi)
 }
-header <- paste('alpha=0', alphas[1:ceiling(9/alphastep)], sep='')
-header <- c(header, paste('alpha=', alphas[-(1:ceiling(9/alphastep))], sep=''))
 
-rownames(df_alpha) <- header
-colnames(df_alpha_r3) <- 'r'
-df_alpha <- tbl_df(t(df_alpha))
-
-# df_alpha <- df_alpha %>% mutate("age"=seq(1,lambda))
-# f1 <- df_alpha %>% gather(alpha, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=alpha) + geom_line()
-# ggsave(file="freq_alpha-1-1.svg", plot=f1, width=6, height=4)
-# 
-# df_alpha_r <- tbl_df(df_alpha_r) %>% mutate(alpha=alphas)
-# f2 <- df_alpha_r %>% ggplot() + aes(x=alpha, y=r) + geom_line()
-# ggsave(file="r_alpha-1-1.svg", plot=f2, width=6, height=4)
+tmp<-data.frame(df_alpha_r, df_alpha_r2, df_alpha_r3)
+colnames(tmp) <- c('s=1', 's=2', 's=0.5')
+df_tmp <- tbl_df(tmp) %>% mutate('alpha'=alphas)
+f <- df_tmp %>% gather(s, r, -alpha) %>% ggplot() + aes(x=alpha, y=r, color=s) + geom_line()
+ggsave(file="r_alpha-1-1_extra.svg", plot=f, width=6, height=4)
 ```
+
+### Omega
 
 Plot different 'menopause' distribution (omega) holding other things constant.
 
@@ -289,9 +230,7 @@ df_omega <- matrix(0, nrow=length(omegas), ncol=lambda)
 df_omega_r <- matrix(0, nrow=length(omegas), ncol=1)
 for (i in 1:length(omegas)) {
   P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b)
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b)
-  B <- makeConstrainedBirthMatrix2(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b, 1)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b, s)
   res<-eigen(t(P+B))
   df_omega_r[i] <- log(Re(res$values[1]))
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
@@ -300,18 +239,14 @@ for (i in 1:length(omegas)) {
 df_omega_r2 <- matrix(0, nrow=length(omegas), ncol=1)
 for (i in 1:length(omegas)) {
   P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b)
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b)
-  B <- makeConstrainedBirthMatrix2(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b, 2)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b, 2)
   res<-eigen(t(P+B))
   df_omega_r2[i] <- log(Re(res$values[1]))
 }
 df_omega_r3 <- matrix(0, nrow=length(omegas), ncol=1)
 for (i in 1:length(omegas)) {
   P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b)
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b)
-  B <- makeConstrainedBirthMatrix2(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b, 0.5)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b, 0.5)
   res<-eigen(t(P+B))
   df_omega_r3[i] <- log(Re(res$values[1]))
 }
@@ -323,14 +258,14 @@ df_omega <- df_omega %>% mutate("age"=seq(1,lambda))
 f1 <- df_omega %>% gather(omega, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=omega) + geom_line()
 ggsave(file="freq_omega-1-1.svg", plot=f1, width=6, height=4)
 
-# f2 <- qplot(omegas, df_omega_r, geom='line', ylab='r', xlab='age at end of fertility')
-# ggsave(file="r_omega-1-1.svg", plot=f2, width=6, height=4)
 tmp<-data.frame(df_omega_r, df_omega_r2, df_omega_r3)
 colnames(tmp) <- c('s=1', 's=2', 's=0.5')
 df_tmp <- tbl_df(tmp) %>% mutate('omega'=omegas)
 f <- df_tmp %>% gather(s, r, -omega) %>% ggplot() + aes(x=omega, y=r, color=s) + geom_line()
 ggsave(file="r_omega-1-1_extra.svg", plot=f, width=6, height=4)
 ```
+
+### b (litter size)
 
 Plot different 'litter size' distribution (b) holding other things constant.
 
@@ -340,11 +275,8 @@ bs <- seq(1, 10, bstep)
 df_b <- matrix(0, nrow=length(bs), ncol=lambda)
 df_b_r <- matrix(0, nrow=length(bs), ncol=1)
 for (i in 1:length(bs)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, a, w, d, 1, 1)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, bs[i])
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, bs[i], m, v, b)
-  B <- makeConstrainedBirthMatrix2(flatBirthRates, tstep, lambda, a, w, m, v, bs[i], 1)
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, bs[i], 1)
   res<-eigen(t(P+B))
   df_b_r[i] <- log(Re(res$values[1]))
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
@@ -352,21 +284,15 @@ for (i in 1:length(bs)) {
 }
 df_b_r2 <- matrix(0, nrow=length(bs), ncol=1)
 for (i in 1:length(bs)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, a, w, d, 1, 1)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, bs[i])
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, bs[i], m, v, b)
-  B <- makeConstrainedBirthMatrix2(flatBirthRates, tstep, lambda, a, w, m, v, bs[i], 2)
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, bs[i], 2)
   res<-eigen(t(P+B))
   df_b_r2[i] <- log(Re(res$values[1]))
 }
 df_b_r3 <- matrix(0, nrow=length(bs), ncol=1)
 for (i in 1:length(bs)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, a, w, d, 1, 1)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, bs[i])
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, bs[i], m, v, b)
-  B <- makeConstrainedBirthMatrix2(flatBirthRates, tstep, lambda, a, w, m, v, bs[i], .5)
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, bs[i], .5)
   res<-eigen(t(P+B))
   df_b_r3[i] <- log(Re(res$values[1]))
 }
@@ -378,14 +304,14 @@ df_b <- df_b %>% mutate("age"=seq(1,lambda))
 f1 <- df_b %>% gather(b, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=b) + geom_line()
 ggsave(file="freq_b-1-1.svg", plot=f1, width=6, height=4)
 
-# f2 <- qplot(bs, df_b_r, geom='line', xlab='litter size', ylab='r')
-# ggsave(file="r_b-1-1.svg", plot=f2, width=6, height=4)
 tmp<-data.frame(df_b_r, df_b_r2, df_b_r3)
 colnames(tmp) <- c('s=1', 's=2', 's=0.5')
 df_tmp <- tbl_df(tmp) %>% mutate('b'=bs)
 f <- df_tmp %>% gather(s, r, -b) %>% ggplot() + aes(x=b, y=r, color=s) + geom_line()
 ggsave(file="r_b-1-1_extra.svg", plot=f, width=6, height=4)
 ```
+
+### s (constraint)
 
 Plot different 'strength of constraint' (s) holding other things constant.
 
@@ -395,11 +321,8 @@ ss <- seq(0, 5, sstep)
 df_s <- matrix(0, nrow=length(ss), ncol=lambda)
 df_s_r <- matrix(0, nrow=length(ss), ncol=1)
 for (i in 1:length(ss)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, a, w, d, 1, 1)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, bs[i])
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, bs[i], m, v, b)
-  B <- makeConstrainedBirthMatrix2(flatBirthRates, tstep, lambda, a, w, m, v, b, ss[i])
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, b, ss[i])
   res<-eigen(t(P+B))
   df_s_r[i] <- log(Re(res$values[1]))
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
@@ -407,21 +330,15 @@ for (i in 1:length(ss)) {
 }
 df_s_r2 <- matrix(0, nrow=length(ss), ncol=1)
 for (i in 1:length(ss)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, a, w, d, 1, 1)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, bs[i])
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, bs[i], m, v, b)
-  B <- makeConstrainedBirthMatrix2(flatBirthRates, tstep, lambda, a, w, m, v, 1, ss[i])
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, 1, ss[i])
   res<-eigen(t(P+B))
   df_s_r2[i] <- log(Re(res$values[1]))
 }
 df_s_r3 <- matrix(0, nrow=length(ss), ncol=1)
 for (i in 1:length(ss)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, a, w, d, 1, 1)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, bs[i])
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, bs[i], m, v, b)
-  B <- makeConstrainedBirthMatrix2(flatBirthRates, tstep, lambda, a, w, m, v, 10, ss[i])
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, 10, ss[i])
   res<-eigen(t(P+B))
   df_s_r3[i] <- log(Re(res$values[1]))
 }
@@ -433,8 +350,6 @@ df_s <- df_s %>% mutate("age"=seq(1,lambda))
 f1 <- df_s %>% gather(s, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=s) + geom_line()
 ggsave(file="freq_s-1-1.svg", plot=f1, width=6, height=4)
 
-# f2 <- qplot(ss, df_s_r, geom='line', xlab='strength of constraint', ylab='r')
-# ggsave(file="r_s-1-1.svg", plot=f2, width=6, height=4)
 tmp<-data.frame(df_s_r, df_s_r2, df_s_r3)
 colnames(tmp) <- c('b=5', 'b=1', 'b=10')
 df_tmp <- tbl_df(tmp) %>% mutate('s'=ss)
@@ -442,7 +357,7 @@ f <- df_tmp %>% gather(b, r, -s) %>% ggplot() + aes(x=s, y=r, color=b) + geom_li
 ggsave(file="r_s-1-1_extra.svg", plot=f, width=6, height=4)
 ```
 
-
+### d (Death)
 
 Plot different death distribution holding other things constant.
 
@@ -452,7 +367,6 @@ df_death <- matrix(0, nrow=length(deaths), ncol=lambda)
 df_death_r <- matrix(0, nrow=length(deaths), ncol=1)
 for (i in 1:length(deaths)) {
   P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, deaths[i], 1, 1)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, b)
   B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, b)
   res<-eigen(t(P+B))
   df_death_r[i] <- log(Re(res$values[1]))
@@ -465,137 +379,150 @@ rownames(df_death) <- header
 df_death <- tbl_df(t(df_death))
 
 df_death <- df_death %>% mutate("age"=seq(1,lambda))
-df_death %>% gather(death, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=death) + geom_point()
+df_death %>%
+  gather(death, freq, -age) %>%
+  ggplot() + aes(x=age,y=freq,color=death) + geom_point()
 
 qplot(deaths, df_death_r, geom='line')
 ```
 
-### Use EM to estimate parameters
-
-```{r}
-
-```
-
-
-```{r}
-f <- df_alpha$`alpha=01`
-age <- seq(0, lambda-1)
-qplot(age, f)
-```
-
-
 ## Normal birth, flat death
+
+### Lambda
 
 Plot different values of lambda (longevity) holding other things constant.
 
 ```{r}
-# lambdas <- seq(m, 3*m, 2)
-# t_lambda <- matrix(0, nrow=length(lambdas), ncol=3*m)
-# t_lambda_r <- matrix(0, nrow=length(lambdas), ncol=1)
-# for (i in 1:length(lambdas)) {
-#   P <- makeSurvivalMatrix(makeDeathRates, tstep, lambdas[i], d, 1, 1)
-#   B <- makeBirthMatrix(normalBirthRates, tstep, lambdas[i], a, w, m, v, b)
-#   res<-eigen(t(P+B))
-#   t_lambda_r[i] <- log(Re(res$values[1]))
-#   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
-#   t_lambda[i,] <- c(Re(x_pi), rep(NA, 3*m-lambdas[i]))
-# }
-# header <- paste('lambda', lambdas, sep=' ')
-# rownames(t_lambda) <- header
-# df_lambda <- tbl_df(t(t_lambda))
-# df_lambda <- df_lambda %>% mutate("age"=seq(1, 3*m))
-# df_lambda %>% gather(lambda, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=lambda) + geom_line()
-# 
-# qplot(lambdas, t_lambda_r, geom='line')
-# qplot(x=seq(1, length(B[,1])), B[,1])
+lambdas <- seq(w, 5*w, w)
+df_lambda <- matrix(0, nrow=length(lambdas), ncol=5*w)
+df_lambda_r <- matrix(0, nrow=length(lambdas), ncol=1)
+
+for (i in 1:length(lambdas)) {
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambdas[i], a, w, d, 1, 1) 
+  B <- makeConstrainedBirthMatrix(normalBirthRates, tstep, lambdas[i], a, w, m, v, b, s)
+  res<-eigen(t(P+B))
+  df_lambda_r[i] <- log(Re(res$values[1]))
+  x_pi <- res$vectors[,1] / sum(res$vectors[,1])
+  # df_lambda[i,] <- c(Re(x_pi), rep(0, 5*w-lambdas[i]))
+  df_lambda[i,] <- c(Re(x_pi), rep(NA, 5*w-lambdas[i]))
+}
+
+header <- paste('lambda', lambdas, sep=' ')
+rownames(df_lambda) <- header
+df_lambda <- tbl_df(t(df_lambda))
+df_lambda <- df_lambda %>% mutate("age"=seq(1, 5*w))
+f1 <- df_lambda %>% gather(lambda, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=lambda) + geom_line()
+ggsave(file="freq_norm_lambda-1-1.svg", plot=f1)
+
+# Plot growth rate given several values of lambda
+f2 <- qplot(lambdas, df_lambda_r, geom='line')
+ggsave(file="r_norm_lambda-1-1.svg", plot=f2)
 ```
+
+### m (mean)
 
 Plot different values of mean reproduction age (m) holding other things
 constant.
 
 ```{r}
-# meanstep <- 1
-# means <- seq(ceiling(m/2), 2*m, meanstep)
-# df_mean <- matrix(0, nrow=length(means), ncol=lambda)
-# df_mean_r <- matrix(0, nrow=length(means), ncol=1)
-# for (i in 1:length(means)) {
-#   P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, d, 1, 1)
-#   B <- makeBirthMatrix(normalBirthRates, tstep, lambda, a, w, means[i], v, b)
-#   res<-eigen(t(P+B))
-#   df_mean_r[i] <- log(Re(res$values[1]))
-#   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
-#   df_mean[i,] <- Re(x_pi)
-# }
-# header <- paste('m=', means, sep='')
-# 
-# rownames(df_mean) <- header
-# colnames(df_mean_r) <- 'r'
-# df_mean <- tbl_df(t(df_mean))
-# 
-# df_mean <- df_mean %>% mutate("age"=seq(1,lambda))
-# df_mean %>% gather(m, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=m) + geom_line()
-# 
-# df_mean_r <- tbl_df(df_mean_r) %>% mutate(m=means)
-# df_mean_r %>% ggplot() + aes(x=m, y=r) + geom_line() + geom_hline(aes(yintercept=0), color='red')
+meanstep <- 1
+means <- seq(ceiling(m/2), 2*m, meanstep)
+df_mean <- matrix(0, nrow=length(means), ncol=lambda)
+df_mean_r <- matrix(0, nrow=length(means), ncol=1)
+for (i in 1:length(means)) {
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1) 
+  B <- makeConstrainedBirthMatrix(normalBirthRates, tstep, lambda, a, w, means[i], v, b, s)
+  res<-eigen(t(P+B))
+  df_mean_r[i] <- log(Re(res$values[1]))
+  x_pi <- res$vectors[,1] / sum(res$vectors[,1])
+  df_mean[i,] <- Re(x_pi)
+}
+header <- paste('m=', means, sep='')
+
+rownames(df_mean) <- header
+colnames(df_mean_r) <- 'r'
+df_mean <- tbl_df(t(df_mean))
+
+df_mean <- df_mean %>% mutate("age"=seq(1,lambda))
+df_mean %>%
+  gather(m, freq, -age) %>%
+  ggplot() + aes(x=age,y=freq,color=m) + geom_line()
+
+df_mean_r <- tbl_df(df_mean_r) %>% mutate(m=means)
+df_mean_r %>%
+  ggplot() + aes(x=m, y=r) + geom_line() + geom_hline(aes(yintercept=0), color='red')
 ```
+
+
+### v (variance)
 
 Plot variance of different distributions other things constant.
 
 ```{r}
-# vstep <- 1
-# vs <- seq(2, 10)
-# t_v <- matrix(0, nrow=length(vs), ncol=lambda)
-# t_v_r <- matrix(0, nrow=length(vs), ncol=1)
-# for (i in 1:length(vs)) {
-#   P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, d, 1, 1)
-#   B <- makeBirthMatrix(normalBirthRates, tstep, lambda, a, w, m, vs[i], b)
-#   res <- eigen(t(P+B))
-#   t_v_r[i] <- log(Re(res$values[1]))
-#   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
-#   t_v[i,] <- Re(x_pi)
-# }
-# header <- paste('v=0', vs[1:8], sep='')
-# header <- c(header, paste('v=', vs[-(1:8)], sep=''))
-# 
-# rownames(t_v) <- header
-# colnames(t_v_r) <- 'r'
-# df_v <- tbl_df(t(t_v))
-# 
-# df_v <- df_v %>% mutate("age"=seq(1,lambda))
-# df_v %>% gather(v, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=v) + geom_line()
-# 
-# df_v_r <- tbl_df(t_v_r) %>% mutate(v=vs)
-# df_v_r %>% ggplot() + aes(x=v, y=r) + geom_line() + geom_hline(aes(yintercept=0))
+vstep <- 1
+vs <- seq(2, 10)
+t_v <- matrix(0, nrow=length(vs), ncol=lambda)
+t_v_r <- matrix(0, nrow=length(vs), ncol=1)
+for (i in 1:length(vs)) {
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, d, 1, 1) 
+  B <- makeConstrainedBirthMatrix(normalBirthRates, tstep, lambda, a, w, m, vs[i], b, s)
+  res <- eigen(t(P+B))
+  t_v_r[i] <- log(Re(res$values[1]))
+  x_pi <- res$vectors[,1] / sum(res$vectors[,1])
+  t_v[i,] <- Re(x_pi)
+}
+header <- paste('v=0', vs[1:8], sep='')
+header <- c(header, paste('v=', vs[-(1:8)], sep=''))
+
+rownames(t_v) <- header
+colnames(t_v_r) <- 'r'
+df_v <- tbl_df(t(t_v))
+
+df_v <- df_v %>% mutate("age"=seq(1,lambda))
+df_v %>%
+  gather(v, freq, -age) %>%
+  ggplot() + aes(x=age,y=freq,color=v) + geom_line()
+
+df_v_r <- tbl_df(t_v_r) %>%
+  mutate(v=vs)
+df_v_r %>%
+  ggplot() + aes(x=v, y=r) + geom_line() + geom_hline(aes(yintercept=0), col='red')
 ```
+
+### d (death)
 
 Plot different death distribution holding other things constant.
 
 ```{r}
-# deaths <- seq(0, .95, .05)
-# df_death <- matrix(0, nrow=length(deaths), ncol=lambda)
-# df_death_r <- matrix(0, nrow=length(deaths), ncol=1)
-# for (i in 1:length(deaths)) {
-#   P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, deaths[i], 1, 1)
-#   B <- makeBirthMatrix(normalBirthRates, tstep, lambda, a, w, m, v, b)
-#   res<-eigen(t(P+B))
-#   df_death_r[i] <- log(Re(res$values[1]))
-#   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
-#   df_death[i,] <- Re(x_pi)
-# }
-# header <- paste('death=', deaths, sep='')
-# rownames(df_death) <- header
-# rownames(df_death) <- header
-# df_death <- tbl_df(t(df_death))
-# 
-# df_death <- df_death %>% mutate("age"=seq(1,lambda))
-# df_death %>% gather(death, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=death) + geom_line()
-# 
-# qplot(deaths, df_death_r, geom='line')
+deaths <- seq(0, .45, .025)
+df_death <- matrix(0, nrow=length(deaths), ncol=lambda)
+df_death_r <- matrix(0, nrow=length(deaths), ncol=1)
+for (i in 1:length(deaths)) {
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, deaths[i], 1, 1)
+  B <- makeConstrainedBirthMatrix(normalBirthRates, tstep, lambda, a, w, m, v, b)
+  res<-eigen(t(P+B))
+  df_death_r[i] <- log(Re(res$values[1]))
+  x_pi <- res$vectors[,1] / sum(res$vectors[,1])
+  df_death[i,] <- Re(x_pi)
+}
+
+header <- paste('death', deaths, sep=' ')
+rownames(df_death) <- header
+rownames(df_death) <- header
+df_death <- tbl_df(t(df_death))
+
+df_death <- df_death %>% mutate("age"=seq(1,lambda))
+df_death %>% 
+  gather(death, freq, -age) %>% 
+  ggplot() + aes(x=age,y=freq,color=death) + geom_point()
+
+qplot(deaths, df_death_r, geom='line')
 ```
 
-## Add skewed survivorship function
 
-### High young mortality, flat birth rate 
+## High young mortality, flat birth rate 
+
+### Lambda
 
 Plot different values of lambda (longevity) holding other things constant.
 
@@ -605,8 +532,7 @@ df_lambda <- matrix(0, nrow=length(lambdas), ncol=5*w)
 df_lambda_r <- matrix(0, nrow=length(lambdas), ncol=1)
 for (i in 1:length(lambdas)) {
   P <- makeSurvivalMatrix(makeDeathRates, tstep, lambdas[i], a, w, d, .2, 5)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambdas[i], a, w, m, v, b)
-  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambdas[i], a, w, m, v, b)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambdas[i], a, w, m, v, b, s)
   res<-eigen(t(P+B))
   df_lambda_r[i] <- log(Re(res$values[1]))
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
@@ -622,6 +548,8 @@ df_lambda %>% gather(lambda, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=l
 qplot(lambdas, df_lambda_r, geom='line')
 ```
 
+### Alpha
+
 Plot different values of alpha (first reproduction age) holding other things
 constant.
 
@@ -631,10 +559,8 @@ alphas <- seq(1, (w-1), alphastep)
 df_alpha <- matrix(0, nrow=length(alphas), ncol=lambda)
 df_alpha_r <- matrix(0, nrow=length(alphas), ncol=1)
 for (i in 1:length(alphas)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, alphas[i], w, d, .2, 5)
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, alphas[i], w, d, .2, 5)
-  B <- makeBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b)
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b)
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, alphas[i], w, d, .2, 5)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b, s)
   res<-eigen(t(P+B))
   df_alpha_r[i] <- log(Re(res$values[1]))
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
@@ -648,11 +574,16 @@ colnames(df_alpha_r) <- 'r'
 df_alpha <- tbl_df(t(df_alpha))
 
 df_alpha <- df_alpha %>% mutate("age"=seq(1,lambda))
-df_alpha %>% gather(alpha, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=alpha) + geom_line()
+df_alpha %>%
+  gather(alpha, freq, -age) %>%
+  ggplot() + aes(x=age,y=freq,color=alpha) + geom_line()
 
 df_alpha_r <- tbl_df(df_alpha_r) %>% mutate(alpha=alphas)
-df_alpha_r %>% ggplot() + aes(x=alpha, y=r) + geom_line() + geom_hline(aes(yintercept=0))
+df_alpha_r %>%
+  ggplot() + aes(x=alpha, y=r) + geom_line() + geom_hline(aes(yintercept=0))
 ```
+
+### Omega
 
 Plot different 'menopause' distribution (omega) holding other things constant.
 
@@ -679,6 +610,8 @@ df_omega %>% gather(omega, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=ome
 qplot(omegas, df_omega_r, geom='line')
 ```
 
+### d (death)
+
 Plot different death distribution holding other things constant.
 
 ```{r}
@@ -687,8 +620,7 @@ df_death <- matrix(0, nrow=length(deaths), ncol=lambda)
 df_death_r <- matrix(0, nrow=length(deaths), ncol=1)
 for (i in 1:length(deaths)) {
   P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, deaths[i], .2, 5)
-  # B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, b)
-  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, b)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, b, s)
   res<-eigen(t(P+B))
   df_death_r[i] <- log(Re(res$values[1]))
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
@@ -700,13 +632,17 @@ rownames(df_death) <- header
 df_death <- tbl_df(t(df_death))
 
 df_death <- df_death %>% mutate("age"=seq(1,lambda))
-df_death %>% gather(death, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=death) + geom_line()
+df_death %>%
+  gather(death, freq, -age) %>%
+  ggplot() + aes(x=age,y=freq,color=death) + geom_line()
 
 qplot(deaths, df_death_r, geom='line')
 ```
 
 
-### High old mortality, flat birth rate
+## High old mortality, flat birth rate
+
+### Lambda
 
 Plot different values of lambda (longevity) holding other things constant.
 
@@ -716,7 +652,7 @@ df_lambda <- matrix(0, nrow=length(lambdas), ncol=5*w)
 df_lambda_r <- matrix(0, nrow=length(lambdas), ncol=1)
 for (i in 1:length(lambdas)) {
   P <- makeSurvivalMatrix(makeDeathRates, tstep, lambdas[i], a, w, d, 5, .2)
-  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambdas[i], a, w, m, v, b)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambdas[i], a, w, m, v, b, s)
   res<-eigen(t(P+B))
   df_lambda_r[i] <- log(Re(res$values[1]))
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
@@ -727,10 +663,14 @@ header <- paste('lambda', lambdas, sep=' ')
 rownames(df_lambda) <- header
 df_lambda <- tbl_df(t(df_lambda))
 df_lambda <- df_lambda %>% mutate("age"=seq(1, 5*w))
-df_lambda %>% gather(lambda, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=lambda) + geom_line()
+df_lambda %>%
+  gather(lambda, freq, -age) %>%
+  ggplot() + aes(x=age,y=freq,color=lambda) + geom_line()
 
 qplot(lambdas, df_lambda_r, geom='line')
 ```
+
+### Alpha
 
 Plot different values of alpha (first reproduction age) holding other things
 constant.
@@ -741,10 +681,8 @@ alphas <- seq(1, (w-1), alphastep)
 df_alpha <- matrix(0, nrow=length(alphas), ncol=lambda)
 df_alpha_r <- matrix(0, nrow=length(alphas), ncol=1)
 for (i in 1:length(alphas)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, alphas[i], w, d, 5, .2)
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, alphas[i], w, d, 5, .2)
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b)
-  B <- makeBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b)
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, alphas[i], w, d, 5, .2)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, alphas[i], w, m, v, b, s)
   res<-eigen(t(P+B))
   df_alpha_r[i] <- log(Re(res$values[1]))
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
@@ -758,11 +696,16 @@ colnames(df_alpha_r) <- 'r'
 df_alpha <- tbl_df(t(df_alpha))
 
 df_alpha <- df_alpha %>% mutate("age"=seq(1,lambda))
-df_alpha %>% gather(alpha, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=alpha) + geom_line()
+df_alpha %>%
+  gather(alpha, freq, -age) %>%
+  ggplot() + aes(x=age,y=freq,color=alpha) + geom_line()
 
 df_alpha_r <- tbl_df(df_alpha_r) %>% mutate(alpha=alphas)
-df_alpha_r %>% ggplot() + aes(x=alpha, y=r) + geom_line() + geom_hline(aes(yintercept=0))
+df_alpha_r %>%
+  ggplot() + aes(x=alpha, y=r) + geom_line() + geom_hline(aes(yintercept=0))
 ```
+
+### Omega
 
 Plot different 'menopause' distribution (omega) holding other things constant.
 
@@ -772,10 +715,8 @@ omegas <- seq(a+1, lambda, omegastep)
 df_omega <- matrix(0, nrow=length(omegas), ncol=lambda)
 df_omega_r <- matrix(0, nrow=length(omegas), ncol=1)
 for (i in 1:length(omegas)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, omegas[1], d, 5, .2)
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, a, omegas[i], d, 5, .2)
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b)
   P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, omegas[i], d, 5, .2)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, omegas[i], m, v, b, s)
   res<-eigen(t(P+B))
   df_omega_r[i] <- log(Re(res$values[1]))
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
@@ -786,10 +727,14 @@ rownames(df_omega) <- header
 df_omega <- tbl_df(t(df_omega))
 
 df_omega <- df_omega %>% mutate("age"=seq(1,lambda))
-df_omega %>% gather(omega, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=omega) + geom_line()
+df_omega %>%
+  gather(omega, freq, -age) %>%
+  ggplot() + aes(x=age,y=freq,color=omega) + geom_line()
 
 qplot(omegas, df_omega_r, geom='line')
 ```
+
+### d (death)
 
 Plot different death distribution holding other things constant.
 
@@ -798,10 +743,8 @@ deaths <- seq(0, .45, .025)
 df_death <- matrix(0, nrow=length(deaths), ncol=lambda)
 df_death_r <- matrix(0, nrow=length(deaths), ncol=1)
 for (i in 1:length(deaths)) {
-  # P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, deaths[i], 5, .2)
-  P <- makeSurvivalMatrix(makeDeathRates2, tstep, lambda, a, w, deaths[i], 5, .2)
-  # B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, b)
-  B <- makeBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, b)
+  P <- makeSurvivalMatrix(makeDeathRates, tstep, lambda, a, w, deaths[i], 5, .2)
+  B <- makeConstrainedBirthMatrix(flatBirthRates, tstep, lambda, a, w, m, v, b, s)
   res<-eigen(t(P+B))
   df_death_r[i] <- log(Re(res$values[1]))
   x_pi <- res$vectors[,1] / sum(res$vectors[,1])
@@ -813,7 +756,9 @@ rownames(df_death) <- header
 df_death <- tbl_df(t(df_death))
 
 df_death <- df_death %>% mutate("age"=seq(1,lambda))
-df_death %>% gather(death, freq, -age) %>% ggplot() + aes(x=age,y=freq,color=death) + geom_line()
+df_death %>%
+  gather(death, freq, -age) %>%
+  ggplot() + aes(x=age,y=freq,color=death) + geom_line()
 
 qplot(deaths, df_death_r, geom='line')
 ```
@@ -821,23 +766,40 @@ qplot(deaths, df_death_r, geom='line')
 
 # MCMC
 
-Given a death distribution, find the distribution of alpha, omega, and lambda
-parameters that maximize r.
+Sample the population parameters to get estimates for maxima. (TERRIBLE, NO
+GOOD, VERY BAD IDEA.)
+
+I had been under the misimpression that the rate function could be constrained
+such that the values converged to 0 at extreme values, but due to the log used
+to compute the intrinsic growth rate, the function will inevitably diverge,
+rendering the total volume in hyperspace infinite and the function
+un-normalizable into a probability density function. Running a Metropolis
+sampler on it is nonsense.
+
+Sadly, the subject I chose for the project turned out to much, much more simple
+than I thought and not very amenable to any of the more interesting topics we
+learned. No EM to find demographic parameters given an empirical age
+distribution, because there is no distribution for parameters. Numerical
+methods are needed. No continuous MCMC, generator matrices, etc. because I
+parameterized the chain such that it is occasionally transient and all states
+move from one to another with each step.
 
 
 ## Uniform survival
 
 ```{r}
-computeGrowthRate <- function(birthFxn, deathFxn, tstep, B, lambda, alpha,
+# Compute the eigenvalues for the transition matrix of the current population.
+# Used for updating steps in the 'Metropolis' algorithm.
+computeGrowthRate <- function(birthFxn, deathFxn, tstep, B, s, lambda, alpha,
                               omega, m, v, death, death_a, death_b) {
-  # P <- makeSurvivalMatrix(deathFxn, tstep, lambda, d=death, death_a, death_b)
-  # B <- makeBirthMatrix(birthFxn, tstep, lambda, alpha, omega, m, v, B)
   P <- makeSurvivalMatrix(deathFxn, tstep, lambda, alpha, omega, d=death, death_a, death_b)
-  B <- makeConstrainedBirthMatrix(birthFxn, tstep, lambda, alpha, omega, m, v, B)
+  B <- makeConstrainedBirthMatrix(birthFxn, tstep, lambda, alpha, omega, m, v, B, s)
   res<-eigen(t(P+B))
   return(log(Re(res$values[1])))
 }
 
+# Use to update all the demographic parameters and make sure they remain the
+# correct data type (int or double) and remain in bounds.
 updateParameter <- function(cur, move_m, move_sd, lower, upper, type) {
   if (type == 'int' ) {
     param <- cur + round(rnorm(1, mean=move_m, sd=move_sd)) # keep integer
@@ -857,7 +819,8 @@ updateParameter <- function(cur, move_m, move_sd, lower, upper, type) {
   return(param)
 }
 
-growthRateMCMC <- function(birthFxn, deathFxn, niter=1000, tstep=1, B0=20,
+# Run a Markov chain to sample from the *not* distribution.
+growthRateMCMC <- function(birthFxn, deathFxn, niter=1000, tstep=1, B0=20, s=1,
                            lambda0=50, alpha0=15, omega0=30, m0=20, v0=5,
                            death=.01, death_a=1, death_b=1) {
   d <- death
@@ -872,22 +835,24 @@ growthRateMCMC <- function(birthFxn, deathFxn, niter=1000, tstep=1, B0=20,
   Bs <- rep(0, niter+1)
   rs <- rep(0, niter+1)
 
+  # Initialize
   lambdas[1] <- lambda0
   alphas[1] <- alpha0
   omegas[1] <- omega0
   ms[1] <- m0
   vs[1] <- v0
   Bs[1] <- B0
-  rs[1] <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[1], lambdas[1],
+  rs[1] <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[1], s, lambdas[1],
                              alphas[1], omegas[1], ms[1], vs[1], d, d_a, d_b)
 
+  # Update parameters
   for (i in 2:(niter+1)) {
     current_r <- rs[i-1]
 
     # Update alphas
     # print('update alpha')
     proposed_a <- updateParameter(alphas[i-1], 0, 1, 1, omegas[i-1]-1, 'int')
-    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1],
+    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1], s,
                                lambdas[i-1], proposed_a, omegas[i-1], ms[i-1],
                                vs[i-1], d, d_a, d_b)
     A <- new_r/current_r
@@ -900,7 +865,7 @@ growthRateMCMC <- function(birthFxn, deathFxn, niter=1000, tstep=1, B0=20,
     # Update omegas
     # print('update omega')
     proposed_w <- updateParameter(omegas[i-1], 0, 1, alphas[i]+1, lambdas[i-1]-1, 'int')
-    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1],
+    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1], s,
                                lambdas[i-1], alphas[i], proposed_w, ms[i-1],
                                vs[i-1], d, d_a, d_b)
     #A <- new_r/current_r
@@ -914,7 +879,7 @@ growthRateMCMC <- function(birthFxn, deathFxn, niter=1000, tstep=1, B0=20,
     # Update lambdas
     # print('update lambda')
     proposed_l <- updateParameter(lambdas[i-1], 0, 1, omegas[i], 10*lambda0, 'int')
-    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1],
+    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1], s,
                                proposed_l, alphas[i], omegas[i], ms[i-1],
                                vs[i-1], d, d_a, d_b)
     A <- new_r/current_r
@@ -924,33 +889,33 @@ growthRateMCMC <- function(birthFxn, deathFxn, niter=1000, tstep=1, B0=20,
       lambdas[i] <- lambdas[i-1]
     }
     
-    # Update means
-    proposed_m <- updateParameter(ms[i-1], 0, .5, 0, lambdas[i], 'double')
-    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1],
-                               lambdas[i], alphas[i], omegas[i], proposed_m,
-                               vs[i-1], d, d_a, d_b)
-    A <- new_r/current_r
-    if (runif(1) < A) {
-      ms[i] <- proposed_m
-    } else {
-      ms[i] <- ms[i-1]
-    }
-    
-    # Update variances
-    proposed_v <- updateParameter(vs[i-1], 0, .1, 0, lambdas[i], 'double')
-    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1],
-                               lambdas[i], alphas[i], omegas[i], ms[i],
-                               proposed_v, d, d_a, d_b)
-    A <- new_r/current_r
-    if (runif(1) < A) {
-      vs[i] <- proposed_v
-    } else {
-      vs[i] <- vs[i-1]
-    }
+    # # Update means
+    # proposed_m <- updateParameter(ms[i-1], 0, .5, 0, lambdas[i], 'double')
+    # new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1], s,
+    #                            lambdas[i], alphas[i], omegas[i], proposed_m,
+    #                            vs[i-1], d, d_a, d_b)
+    # A <- new_r/current_r
+    # if (runif(1) < A) {
+    #   ms[i] <- proposed_m
+    # } else {
+    #   ms[i] <- ms[i-1]
+    # }
+    # 
+    # # Update variances
+    # proposed_v <- updateParameter(vs[i-1], 0, .1, 0, lambdas[i], 'double')
+    # new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i-1], s,
+    #                            lambdas[i], alphas[i], omegas[i], ms[i],
+    #                            proposed_v, d, d_a, d_b)
+    # A <- new_r/current_r
+    # if (runif(1) < A) {
+    #   vs[i] <- proposed_v
+    # } else {
+    #   vs[i] <- vs[i-1]
+    # }
     
     # Update litter size
     proposed_B <- updateParameter(Bs[i-1], 0, 1, 1, 1000, 'int')
-    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, proposed_B,
+    new_r <- computeGrowthRate(birthFxn, deathFxn, tstep, proposed_B, s,
                                lambdas[i], alphas[i], omegas[i], ms[i], vs[i],
                                d, d_a, d_b)
     A <- new_r/current_r
@@ -960,14 +925,14 @@ growthRateMCMC <- function(birthFxn, deathFxn, niter=1000, tstep=1, B0=20,
       Bs[i] <- Bs[i-1]
     }
 
-    rs[i] <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i], lambdas[i],
+    rs[i] <- computeGrowthRate(birthFxn, deathFxn, tstep, Bs[i], s, lambdas[i],
                                alphas[i], omegas[i], ms[i], vs[i], d, d_a,
                                d_b)
-    print(rs[i])
-    print(lambdas[i])
-    print(alphas[i])
-    print(omegas[i])
-    print(Bs[i])
+    # print(rs[i])
+    # print(lambdas[i])
+    # print(alphas[i])
+    # print(omegas[i])
+    # print(Bs[i])
   }
 
   # return(list(r=rs, l=lambdas, a=alphas, w=omegas, m=ms, v=vs, B=Bs))
@@ -979,6 +944,7 @@ growthRateMCMC <- function(birthFxn, deathFxn, niter=1000, tstep=1, B0=20,
 niter <- 1000
 tstep <- 1
 B0 <- 10
+s <- 1
 lambda0 <- 50
 alpha0 <- 15
 omega0 <- 30
@@ -988,23 +954,23 @@ death <- .1
 ```
 
 ```{r}
-# death_a <- 1
-# death_b <- 1
-# 
-# res <- growthRateMCMC(flatBirthRates, makeDeathRates, niter, tstep, B0,
-#                       lambda0, alpha0, omega0, m0, v0, death, death_a, death_b)
-# df_res <- tbl_df(res)
+death_a <- 1
+death_b <- 1
+
+res <- growthRateMCMC(flatBirthRates, makeDeathRates, niter, tstep, B0, s,
+                      lambda0, alpha0, omega0, m0, v0, death, death_a, death_b)
+df_res <- tbl_df(res)
 ```
 
 ```{r}
-# df_res[which.max(res$r),]
+df_res[which.max(res$r),]
 ```
 
 ```{r}
-# ggplot(df_res) + aes(x=a, y=r) + geom_point()
-# ggplot(df_res) + aes(x=B, y=r) + geom_point()
-# ggplot(df_res) + aes(x=w, y=r) + geom_point()
-# ggplot(df_res) + aes(x=l, y=r) + geom_point()
+ggplot(df_res) + aes(x=a, y=r) + geom_point()
+ggplot(df_res) + aes(x=B, y=r) + geom_point()
+ggplot(df_res) + aes(x=w, y=r) + geom_point()
+ggplot(df_res) + aes(x=l, y=r) + geom_point()
 ```
 
 
